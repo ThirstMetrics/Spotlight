@@ -1,0 +1,761 @@
+// ============================================================================
+// Spotlight — Hotel Multi-Outlet Beverage Management Platform
+// Prisma Schema (PostgreSQL)
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Category {
+  BEER
+  WINE
+  SPIRITS
+  SAKE
+  NON_ALCOHOLIC
+}
+
+enum UserRole {
+  VP
+  DIRECTOR
+  ADMIN
+  ROOM_MANAGER
+  DISTRIBUTOR
+  SUPPLIER
+}
+
+enum AlertType {
+  MANDATE_COMPLIANCE
+  PULL_THROUGH_HIGH
+  PULL_THROUGH_LOW
+  DAYS_OF_INVENTORY
+  NEW_DIRECT_ITEM
+  PRICE_DISCREPANCY
+  PRICE_CHANGE
+  COST_GOAL_EXCEEDED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum UploadType {
+  WAREHOUSE_TRANSFER
+  DIRECT_ORDER
+  SALES_DATA
+  DISTRIBUTOR_CHART
+}
+
+enum UploadSource {
+  BIRCHSTREET
+  STRATTON_WARREN
+  ORACLE
+  MICROS
+  AGILYSYS
+  TOAST
+  OTHER
+}
+
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum OrderType {
+  WAREHOUSE
+  DIRECT
+}
+
+// ============================================================================
+// ORGANIZATION & ACCESS
+// ============================================================================
+
+model OrganizationGroup {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  organizations Organization[]
+
+  @@map("organization_groups")
+}
+
+model Organization {
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  address             String?
+  city                String?
+  state               String?
+  zip                 String?
+  phone               String?
+  logoUrl             String?  @map("logo_url")
+  organizationGroupId String?  @map("organization_group_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  organizationGroup OrganizationGroup? @relation(fields: [organizationGroupId], references: [id], onDelete: SetNull)
+
+  outlets            Outlet[]
+  outletGroups       OutletGroup[]
+  userRoles          UserRoleAssignment[]
+  mandates           Mandate[]
+  warehouseTransfers WarehouseTransfer[]
+  directOrders       DirectOrder[]
+  orderHistory       OrderHistory[]
+  salesData          SalesData[]
+  recipes            Recipe[]
+  alertRules         AlertRule[]
+  alerts             Alert[]
+  flashMessages      FlashMessage[]
+  hotelOccupancy     HotelOccupancy[]
+  uploads            Upload[]
+  fieldMappingProfiles FieldMappingProfile[]
+
+  @@map("organizations")
+}
+
+model Outlet {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String
+  type            String
+  organizationId  String   @map("organization_id")
+  outletGroupId   String?  @map("outlet_group_id")
+  managerName     String?  @map("manager_name")
+  phone           String?
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outletGroup  OutletGroup? @relation(fields: [outletGroupId], references: [id], onDelete: SetNull)
+
+  userRoles          UserRoleAssignment[]
+  mandateCompliance  MandateCompliance[]
+  warehouseTransfers WarehouseTransfer[]
+  directOrders       DirectOrder[]
+  orderHistory       OrderHistory[]
+  inventorySnapshots InventorySnapshot[]
+  salesData          SalesData[]
+  recipes            Recipe[]
+  costGoals          CostGoal[]
+  priceTracking      PriceTracking[]
+  alertRules         AlertRule[]
+  alerts             Alert[]
+  flashMessages      FlashMessage[]
+
+  @@unique([organizationId, slug])
+  @@map("outlets")
+}
+
+model OutletGroup {
+  id             String   @id @default(cuid())
+  name           String
+  organizationId String   @map("organization_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlets      Outlet[]
+
+  @@map("outlet_groups")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  avatarUrl   String?   @map("avatar_url")
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  userRoles          UserRoleAssignment[]
+  mandatesCreated    Mandate[]           @relation("MandateCreator")
+  recipesCreated     Recipe[]            @relation("RecipeCreator")
+  costGoalsCreated   CostGoal[]          @relation("CostGoalCreator")
+  alertRulesCreated  AlertRule[]         @relation("AlertRuleCreator")
+  flashMessagesSent  FlashMessage[]      @relation("FlashMessageSender")
+  productCatalogEntries ProductCatalog[] @relation("CatalogCreator")
+  uploads            Upload[]            @relation("Uploader")
+  fieldMappingProfiles FieldMappingProfile[] @relation("MappingCreator")
+  portalSessions     PortalSession[]
+  portalInteractions PortalInteraction[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        UserRole @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  userRoles UserRoleAssignment[]
+
+  @@map("roles")
+}
+
+model UserRoleAssignment {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  roleId         String   @map("role_id")
+  organizationId String?  @map("organization_id")
+  outletId       String?  @map("outlet_id")
+  distributorId  String?  @map("distributor_id")
+  supplierId     String?  @map("supplier_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlet       Outlet?       @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  distributor  Distributor?  @relation(fields: [distributorId], references: [id], onDelete: SetNull)
+  supplier     Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, roleId, organizationId, outletId])
+  @@map("user_roles")
+}
+
+// ============================================================================
+// PRODUCTS & PARTNERS
+// ============================================================================
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String   @unique
+  name        String
+  category    Category
+  subcategory String?
+  size        String?
+  unit        String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  distributorProducts DistributorProduct[]
+  mandateItems        MandateItem[]
+  warehouseTransfers  WarehouseTransfer[]
+  directOrders        DirectOrder[]
+  orderHistory        OrderHistory[]
+  inventorySnapshots  InventorySnapshot[]
+  salesData           SalesData[]
+  recipeIngredients   RecipeIngredient[]
+  priceTracking       PriceTracking[]
+  alertRules          AlertRule[]
+  alerts              Alert[]
+  catalogOriginal     ProductCatalog[]    @relation("OriginalProduct")
+  catalogSubstitute   ProductCatalog[]    @relation("SubstituteProduct")
+
+  @@index([category])
+  @@map("products")
+}
+
+model Distributor {
+  id           String   @id @default(cuid())
+  name         String
+  contactName  String?  @map("contact_name")
+  contactEmail String?  @map("contact_email")
+  contactPhone String?  @map("contact_phone")
+  address      String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  distributorProducts DistributorProduct[]
+  directOrders        DirectOrder[]
+  orderHistory        OrderHistory[]
+  alerts              Alert[]
+  userRoles           UserRoleAssignment[]
+
+  @@map("distributors")
+}
+
+model Supplier {
+  id           String   @id @default(cuid())
+  name         String
+  contactName  String?  @map("contact_name")
+  contactEmail String?  @map("contact_email")
+  contactPhone String?  @map("contact_phone")
+  website      String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  distributorProducts DistributorProduct[]
+  directOrders        DirectOrder[]
+  orderHistory        OrderHistory[]
+  userRoles           UserRoleAssignment[]
+
+  @@map("suppliers")
+}
+
+model DistributorProduct {
+  id            String   @id @default(cuid())
+  distributorId String   @map("distributor_id")
+  productId     String   @map("product_id")
+  supplierId    String   @map("supplier_id")
+  cost          Float
+  skuOverride   String?  @map("sku_override")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier    Supplier    @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([distributorId, productId])
+  @@map("distributor_products")
+}
+
+model ProductCatalog {
+  id                  String   @id @default(cuid())
+  productId           String   @map("product_id")
+  substituteProductId String   @map("substitute_product_id")
+  notes               String?
+  createdBy           String   @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  product           Product @relation("OriginalProduct", fields: [productId], references: [id], onDelete: Cascade)
+  substituteProduct Product @relation("SubstituteProduct", fields: [substituteProductId], references: [id], onDelete: Cascade)
+  creator           User    @relation("CatalogCreator", fields: [createdBy], references: [id])
+
+  @@map("product_catalog")
+}
+
+// ============================================================================
+// MANDATES & COMPLIANCE
+// ============================================================================
+
+model Mandate {
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String    @map("organization_id")
+  createdBy      String    @map("created_by")
+  isActive       Boolean   @default(true) @map("is_active")
+  startDate      DateTime  @map("start_date")
+  endDate        DateTime? @map("end_date")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User         @relation("MandateCreator", fields: [createdBy], references: [id])
+
+  mandateItems MandateItem[]
+
+  @@map("mandates")
+}
+
+model MandateItem {
+  id              String   @id @default(cuid())
+  mandateId       String   @map("mandate_id")
+  productId       String   @map("product_id")
+  minimumQuantity Int?     @map("minimum_quantity")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  mandate Mandate @relation(fields: [mandateId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  mandateCompliance MandateCompliance[]
+
+  @@unique([mandateId, productId])
+  @@map("mandate_items")
+}
+
+model MandateCompliance {
+  id                String    @id @default(cuid())
+  mandateItemId     String    @map("mandate_item_id")
+  outletId          String    @map("outlet_id")
+  isCompliant       Boolean   @default(false) @map("is_compliant")
+  lastOrderDate     DateTime? @map("last_order_date")
+  lastOrderQuantity Int?      @map("last_order_quantity")
+  checkedAt         DateTime  @map("checked_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  mandateItem MandateItem @relation(fields: [mandateItemId], references: [id], onDelete: Cascade)
+  outlet      Outlet      @relation(fields: [outletId], references: [id], onDelete: Cascade)
+
+  @@unique([mandateItemId, outletId])
+  @@map("mandate_compliance")
+}
+
+// ============================================================================
+// INVENTORY & ORDERS
+// ============================================================================
+
+model WarehouseTransfer {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  outletId        String   @map("outlet_id")
+  productId       String   @map("product_id")
+  quantity         Float
+  costPerUnit     Float    @map("cost_per_unit")
+  totalCost       Float    @map("total_cost")
+  transferDate    DateTime @map("transfer_date")
+  referenceNumber String?  @map("reference_number")
+  notes           String?
+  uploadId        String?  @map("upload_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlet       Outlet       @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  upload       Upload?      @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  @@index([outletId, transferDate])
+  @@map("warehouse_transfers")
+}
+
+model DirectOrder {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  outletId        String    @map("outlet_id")
+  productId       String    @map("product_id")
+  distributorId   String?   @map("distributor_id")
+  supplierId      String?   @map("supplier_id")
+  quantity         Float
+  costPerUnit     Float     @map("cost_per_unit")
+  totalCost       Float     @map("total_cost")
+  orderDate       DateTime  @map("order_date")
+  receivedDate    DateTime? @map("received_date")
+  referenceNumber String?   @map("reference_number")
+  notes           String?
+  uploadId        String?   @map("upload_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlet       Outlet       @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  distributor  Distributor? @relation(fields: [distributorId], references: [id], onDelete: SetNull)
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  upload       Upload?      @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  @@index([outletId, orderDate])
+  @@map("direct_orders")
+}
+
+model InventorySnapshot {
+  id             String   @id @default(cuid())
+  outletId       String   @map("outlet_id")
+  productId      String   @map("product_id")
+  quantityOnHand Float    @map("quantity_on_hand")
+  snapshotDate   DateTime @map("snapshot_date")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  outlet  Outlet  @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([outletId, productId, snapshotDate])
+  @@map("inventory_snapshots")
+}
+
+model OrderHistory {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  outletId        String    @map("outlet_id")
+  productId       String    @map("product_id")
+  distributorId   String    @map("distributor_id")
+  supplierId      String?   @map("supplier_id")
+  quantity         Float
+  costPerUnit     Float     @map("cost_per_unit")
+  totalCost       Float     @map("total_cost")
+  orderDate       DateTime  @map("order_date")
+  orderType       OrderType @map("order_type")
+  referenceNumber String?   @map("reference_number")
+  uploadId        String?   @map("upload_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlet       Outlet       @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  distributor  Distributor  @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  upload       Upload?      @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  @@index([outletId, productId, orderDate])
+  @@map("order_history")
+}
+
+// ============================================================================
+// SALES & MARGINS
+// ============================================================================
+
+model SalesData {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  outletId       String        @map("outlet_id")
+  productId      String?       @map("product_id")
+  itemName       String        @map("item_name")
+  quantitySold   Float         @map("quantity_sold")
+  revenue        Float
+  saleDate       DateTime      @map("sale_date")
+  posSource      UploadSource? @map("pos_source")
+  uploadId       String?       @map("upload_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlet       Outlet       @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  upload       Upload?      @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  @@index([outletId, productId, saleDate])
+  @@map("sales_data")
+}
+
+model Recipe {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  organizationId String  @map("organization_id")
+  outletId      String?  @map("outlet_id")
+  yieldServings Int      @map("yield_servings")
+  sellingPrice  Float?   @map("selling_price")
+  category      String?
+  createdBy     String   @map("created_by")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlet       Outlet?          @relation(fields: [outletId], references: [id], onDelete: SetNull)
+  creator      User             @relation("RecipeCreator", fields: [createdBy], references: [id])
+
+  ingredients RecipeIngredient[]
+
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id        String   @id @default(cuid())
+  recipeId  String   @map("recipe_id")
+  productId String   @map("product_id")
+  quantity  Float
+  unit      String
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  recipe  Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_ingredients")
+}
+
+model CostGoal {
+  id                   String    @id @default(cuid())
+  outletId             String    @map("outlet_id")
+  category             Category?
+  targetCostPercentage Float     @map("target_cost_percentage")
+  effectiveDate        DateTime  @map("effective_date")
+  createdBy            String    @map("created_by")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  outlet  Outlet @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  creator User   @relation("CostGoalCreator", fields: [createdBy], references: [id])
+
+  @@map("cost_goals")
+}
+
+model PriceTracking {
+  id            String   @id @default(cuid())
+  outletId      String   @map("outlet_id")
+  productId     String   @map("product_id")
+  menuPrice     Float    @map("menu_price")
+  effectiveDate DateTime @map("effective_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  outlet  Outlet  @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("price_tracking")
+}
+
+// ============================================================================
+// ALERTS & NOTIFICATIONS
+// ============================================================================
+
+model AlertRule {
+  id                  String    @id @default(cuid())
+  organizationId      String    @map("organization_id")
+  alertType           AlertType @map("alert_type")
+  isEnabled           Boolean   @default(true) @map("is_enabled")
+  thresholdValue      Float?    @map("threshold_value")
+  thresholdUnit       String?   @map("threshold_unit")
+  appliesToOutletId   String?   @map("applies_to_outlet_id")
+  appliesToProductId  String?   @map("applies_to_product_id")
+  createdBy           String    @map("created_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appliesToOutlet  Outlet?      @relation(fields: [appliesToOutletId], references: [id], onDelete: SetNull)
+  appliesToProduct Product?     @relation(fields: [appliesToProductId], references: [id], onDelete: SetNull)
+  creator          User         @relation("AlertRuleCreator", fields: [createdBy], references: [id])
+
+  @@map("alert_rules")
+}
+
+model Alert {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  outletId       String?       @map("outlet_id")
+  productId      String?       @map("product_id")
+  distributorId  String?       @map("distributor_id")
+  alertType      AlertType     @map("alert_type")
+  severity       AlertSeverity
+  title          String
+  message        String
+  isRead         Boolean       @default(false) @map("is_read")
+  isDismissed    Boolean       @default(false) @map("is_dismissed")
+  linkUrl        String?       @map("link_url")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  resolvedAt     DateTime?     @map("resolved_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  outlet       Outlet?      @relation(fields: [outletId], references: [id], onDelete: SetNull)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  distributor  Distributor? @relation(fields: [distributorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, isDismissed, createdAt])
+  @@map("alerts")
+}
+
+model FlashMessage {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  senderId       String    @map("sender_id")
+  outletId       String?   @map("outlet_id")
+  subject        String
+  body           String
+  isRead         Boolean   @default(false) @map("is_read")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  readAt         DateTime? @map("read_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("FlashMessageSender", fields: [senderId], references: [id])
+  outlet       Outlet?      @relation(fields: [outletId], references: [id], onDelete: SetNull)
+
+  @@map("flash_messages")
+}
+
+// ============================================================================
+// ANALYTICS
+// ============================================================================
+
+model PortalSession {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  loginAt   DateTime  @default(now()) @map("login_at")
+  logoutAt  DateTime? @map("logout_at")
+  ipAddress String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interactions PortalInteraction[]
+
+  @@map("portal_sessions")
+}
+
+model PortalInteraction {
+  id        String   @id @default(cuid())
+  sessionId String   @map("session_id")
+  userId    String   @map("user_id")
+  pagePath  String   @map("page_path")
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session PortalSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("portal_interactions")
+}
+
+// ============================================================================
+// ADMIN
+// ============================================================================
+
+model HotelOccupancy {
+  id                String   @id @default(cuid())
+  organizationId    String   @map("organization_id")
+  date              DateTime @db.Date
+  hotelGuests       Int      @map("hotel_guests")
+  restaurantCovers  Int?     @map("restaurant_covers")
+  eventAttendees    Int?     @map("event_attendees")
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
+  @@map("hotel_occupancy")
+}
+
+// ============================================================================
+// DATA UPLOADS
+// ============================================================================
+
+model Upload {
+  id               String       @id @default(cuid())
+  organizationId   String       @map("organization_id")
+  uploadedBy       String       @map("uploaded_by")
+  fileName         String       @map("file_name")
+  fileSize         Int          @map("file_size")
+  uploadType       UploadType   @map("upload_type")
+  uploadSource     UploadSource @map("upload_source")
+  status           UploadStatus @default(PENDING)
+  recordsProcessed Int?         @map("records_processed")
+  recordsFailed    Int?         @map("records_failed")
+  errorMessage     String?      @map("error_message")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  completedAt      DateTime?    @map("completed_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploader     User         @relation("Uploader", fields: [uploadedBy], references: [id])
+
+  warehouseTransfers WarehouseTransfer[]
+  directOrders       DirectOrder[]
+  orderHistory       OrderHistory[]
+  salesData          SalesData[]
+
+  @@map("uploads")
+}
+
+model FieldMappingProfile {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  source         UploadSource
+  uploadType     UploadType   @map("upload_type")
+  name           String
+  mapping        Json
+  createdBy      String       @map("created_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User         @relation("MappingCreator", fields: [createdBy], references: [id])
+
+  @@unique([organizationId, source, uploadType, name])
+  @@map("field_mapping_profiles")
+}

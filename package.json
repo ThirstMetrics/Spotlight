@@ -1,0 +1,36 @@
+{
+  "name": "spotlight",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "test:alerts": "turbo test --filter=@spotlight/alert-engine",
+    "test:margins": "turbo test --filter=@spotlight/shared",
+    "db:migrate": "pnpm --filter @spotlight/db migrate",
+    "db:seed": "pnpm --filter @spotlight/db seed",
+    "db:studio": "pnpm --filter @spotlight/db studio",
+    "db:generate": "pnpm --filter @spotlight/db generate",
+    "docker:build": "docker compose -f docker/docker-compose.yml build",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild"
+    ]
+  }
+}

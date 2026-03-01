@@ -1,0 +1,78 @@
+name: Docker Build & Push
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+
+env:
+  REGISTRY: ghcr.io
+  WEB_IMAGE: ghcr.io/thirstmetrics/spotlight-web
+  PORTAL_IMAGE: ghcr.io/thirstmetrics/spotlight-portal
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for web image
+        id: meta-web
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.web
+          push: true
+          tags: ${{ steps.meta-web.outputs.tags }}
+          labels: ${{ steps.meta-web.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata for portal image
+        id: meta-portal
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.PORTAL_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push portal image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.portal
+          push: true
+          tags: ${{ steps.meta-portal.outputs.tags }}
+          labels: ${{ steps.meta-portal.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

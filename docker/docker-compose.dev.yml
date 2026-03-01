@@ -1,0 +1,43 @@
+version: "3.9"
+
+# Development override: only database services
+# Usage: docker compose -f docker-compose.dev.yml up -d
+# Run Next.js apps natively with `pnpm dev`
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: spotlight-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: spotlight
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spotlight_dev}
+      POSTGRES_DB: spotlight
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spotlight -d spotlight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: spotlight-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
