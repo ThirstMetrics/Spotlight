@@ -2,8 +2,10 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/lib/theme";
 import {
   LayoutDashboard,
   Store,
@@ -76,29 +78,54 @@ const navGroups = [
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { theme } = useTheme();
 
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r bg-card transition-all duration-300",
+        "flex h-screen flex-col border-r transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
+      style={{
+        backgroundColor: "var(--color-sidebar)",
+        color: "var(--color-sidebar-foreground)",
+      }}
     >
       {/* Header */}
-      <div className="flex h-16 items-center justify-between border-b px-4">
+      <div
+        className="flex h-16 items-center justify-between px-4"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+      >
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-              S
-            </div>
-            <span className="font-semibold text-lg">Spotlight</span>
-          </div>
+          <Link href="/overview" className="flex items-center gap-2 min-w-0">
+            <Image
+              src={theme.logo.horizontal}
+              alt={theme.label}
+              width={140}
+              height={32}
+              className="h-8 w-auto object-contain"
+              priority
+            />
+          </Link>
+        )}
+        {collapsed && (
+          <Link href="/overview" className="mx-auto">
+            <Image
+              src={theme.logo.icon}
+              alt={theme.label}
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain"
+              priority
+            />
+          </Link>
         )}
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setCollapsed(!collapsed)}
-          className="h-8 w-8"
+          className="h-8 w-8 hover:bg-white/10"
+          style={{ color: "var(--color-sidebar-foreground)" }}
         >
           {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
@@ -106,10 +133,13 @@ export function Sidebar() {
 
       {/* Property Info */}
       {!collapsed && (
-        <div className="border-b px-4 py-3">
-          <p className="text-xs text-muted-foreground">Property</p>
+        <div
+          className="px-4 py-3"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          <p className="text-xs opacity-60">Property</p>
           <p className="text-sm font-medium truncate">Resorts World Las Vegas</p>
-          <p className="text-xs text-muted-foreground">Director</p>
+          <p className="text-xs opacity-60">Director</p>
         </div>
       )}
 
@@ -118,7 +148,7 @@ export function Sidebar() {
         {navGroups.map((group) => (
           <div key={group.label} className="mb-2">
             {!collapsed && (
-              <p className="px-4 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              <p className="px-4 py-1 text-xs font-medium uppercase tracking-wider opacity-50">
                 {group.label}
               </p>
             )}
@@ -131,10 +161,19 @@ export function Sidebar() {
                   className={cn(
                     "flex items-center gap-3 px-4 py-2 text-sm transition-colors",
                     isActive
-                      ? "bg-primary/10 text-primary font-medium border-r-2 border-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                      ? "font-medium border-r-2"
+                      : "opacity-70 hover:opacity-100",
                     collapsed && "justify-center px-2"
                   )}
+                  style={
+                    isActive
+                      ? {
+                          backgroundColor: "var(--color-sidebar-active)",
+                          color: "var(--color-accent, #5ad196)",
+                          borderColor: "var(--color-accent, #5ad196)",
+                        }
+                      : undefined
+                  }
                   title={collapsed ? item.label : undefined}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
@@ -147,19 +186,24 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-4">
+      <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
         <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-medium">
             JD
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">John Doe</p>
-              <p className="text-xs text-muted-foreground">Director</p>
+              <p className="text-xs opacity-60">Director</p>
             </div>
           )}
           {!collapsed && (
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-white/10"
+              style={{ color: "var(--color-sidebar-foreground)" }}
+            >
               <LogOut className="h-4 w-4" />
             </Button>
           )}
