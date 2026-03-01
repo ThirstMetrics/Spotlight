@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 export default function PortalLoginPage() {
   const [email, setEmail] = useState("");
@@ -25,23 +26,35 @@ export default function PortalLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-md space-y-8 rounded-lg border border-border bg-card p-8 shadow-lg">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md space-y-8 rounded-xl border border-gray-200 bg-white p-10 shadow-lg">
+        {/* Logo */}
+        <div className="flex justify-center">
+          <Image
+            src="/logos/spotlight-horizontal-navy.svg"
+            alt="Spotlight"
+            width={200}
+            height={48}
+            priority
+          />
+        </div>
+
+        {/* Title */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-[#06113e]">
             Partner Portal
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-gray-500">
             Sign in to access your distributor or supplier dashboard
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-4">
             <div>
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-foreground"
+                className="block text-sm font-medium text-gray-700"
               >
                 Email address
               </label>
@@ -53,7 +66,7 @@ export default function PortalLoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#06113e] focus:outline-none focus:ring-1 focus:ring-[#06113e]"
                 placeholder="partner@example.com"
               />
             </div>
@@ -61,7 +74,7 @@ export default function PortalLoginPage() {
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-foreground"
+                className="block text-sm font-medium text-gray-700"
               >
                 Password
               </label>
@@ -73,7 +86,7 @@ export default function PortalLoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#06113e] focus:outline-none focus:ring-1 focus:ring-[#06113e]"
                 placeholder="Enter your password"
               />
             </div>
@@ -82,23 +95,24 @@ export default function PortalLoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="flex w-full justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full justify-center rounded-md bg-[#06113e] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#06113e]/90 focus:outline-none focus:ring-2 focus:ring-[#06113e] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
           >
-            {isLoading ? "Signing in..." : "Sign in"}
+            {isLoading ? "Signing in..." : "Sign In"}
           </button>
 
           <div className="text-center">
             <a
               href="#"
-              className="text-sm text-primary hover:text-primary/80"
+              className="text-sm font-medium text-[#5ad196] hover:text-[#5ad196]/80 transition-colors"
             >
               Forgot your password?
             </a>
           </div>
         </form>
 
-        <div className="border-t border-border pt-4 text-center">
-          <p className="text-xs text-muted-foreground">
+        {/* Footer */}
+        <div className="border-t border-gray-100 pt-4 text-center">
+          <p className="text-xs text-gray-400">
             Spotlight Beverage Management Platform
           </p>
         </div>

@@ -43,6 +43,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        spotlight: {
+          navy: { DEFAULT: '#06113e' },
+          green: { DEFAULT: '#5ad196' },
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
