@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.github
+.turbo
+dist
+*.log
+.env
+.env.*
+!.env.example
+docker/postgres_data

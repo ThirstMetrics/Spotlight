@@ -1,109 +1,154 @@
-import type { AlertResult } from './alert-processor';
+import { prisma } from "@spotlight/db";
+import type { AlertResult } from "./alert-processor";
 
 /**
  * AlertNotifier handles persisting alert results to the database and
  * managing alert lifecycle (creation, dismissal, read status).
- * It also dispatches real-time notifications via Supabase Realtime
- * to connected clients.
  */
 export class AlertNotifier {
   /**
    * Create a new alert record in the database from an alert result.
-   *
-   * TODO: Implement alert creation:
-   * 1. Check for duplicate alerts (same type, outlet, product, still unread)
-   *    to avoid spamming users with the same alert
-   * 2. Insert a new record into the alerts table via Prisma:
-   *    - type, severity, title, message, metadata from AlertResult
-   *    - organization_id from parameter
-   *    - outlet_id, product_id from AlertResult (if present)
-   *    - status: 'unread'
-   *    - created_at: now
-   * 3. Determine notification targets based on alert type and RBAC:
-   *    - Mandate compliance: director + room manager for the outlet
-   *    - Pull-through/inventory: room manager + admin
-   *    - Price alerts: admin
-   *    - Cost goal: director + admin
-   * 4. Dispatch real-time notification via Supabase Realtime channel
-   * 5. Optionally queue email notification for critical alerts
-   *
-   * @param result - The alert result to persist
-   * @param organizationId - The organization this alert belongs to
+   * Deduplicates against existing unread alerts to avoid spamming.
    */
-  async createAlert(result: AlertResult, organizationId: string): Promise<void> {
-    // TODO: Check for existing duplicate unread alert
-    // TODO: Insert alert record via Prisma
-    // TODO: Determine notification targets based on alert type and roles
-    // TODO: Broadcast via Supabase Realtime to connected clients
-    // TODO: Queue email notification for critical severity alerts
-    // TODO: Log alert creation for audit trail
-    console.log(
-      `[AlertNotifier] Creating alert: type=${result.type}, severity=${result.severity}, org=${organizationId}`
-    );
+  async createAlert(result: AlertResult, organizationId: string): Promise<string | null> {
+    // Check for duplicate alerts (same type, outlet, product, still unread)
+    const existing = await prisma.alert.findFirst({
+      where: {
+        organizationId,
+        alertType: result.type,
+        outletId: result.outletId ?? null,
+        productId: result.productId ?? null,
+        isDismissed: false,
+        isRead: false,
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return null; // Already have an active alert for this condition
+    }
+
+    const alert = await prisma.alert.create({
+      data: {
+        organizationId,
+        alertType: result.type,
+        severity: result.severity,
+        title: result.title,
+        message: result.message,
+        outletId: result.outletId ?? null,
+        productId: result.productId ?? null,
+        distributorId: result.distributorId ?? null,
+        isRead: false,
+        isDismissed: false,
+      },
+    });
+
+    return alert.id;
+  }
+
+  /**
+   * Batch create alerts from a list of alert results.
+   * Returns the IDs of newly created alerts (excludes duplicates).
+   */
+  async createAlerts(results: AlertResult[], organizationId: string): Promise<string[]> {
+    const createdIds: string[] = [];
+
+    for (const result of results) {
+      const id = await this.createAlert(result, organizationId);
+      if (id) createdIds.push(id);
+    }
+
+    return createdIds;
   }
 
   /**
    * Dismiss an alert (mark as resolved/dismissed by the user).
-   *
-   * TODO: Implement alert dismissal:
-   * 1. Update the alert record status to 'dismissed'
-   * 2. Record who dismissed it and when
-   * 3. Optionally record a dismissal reason/note
-   * 4. Broadcast the status change via Supabase Realtime
-   *    so other connected clients see the update
-   *
-   * @param alertId - The ID of the alert to dismiss
    */
   async dismissAlert(alertId: string): Promise<void> {
-    // TODO: Update alert status to 'dismissed' via Prisma
-    // TODO: Set dismissed_at timestamp and dismissed_by user ID
-    // TODO: Broadcast status change via Supabase Realtime
-    // TODO: Log dismissal for audit trail
-    console.log(`[AlertNotifier] Dismissing alert: ${alertId}`);
+    await prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        isDismissed: true,
+        resolvedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Mark a specific alert as read.
+   * Does not change status if alert is already dismissed.
+   */
+  async markAsRead(alertId: string): Promise<void> {
+    const alert = await prisma.alert.findUnique({
+      where: { id: alertId },
+      select: { isDismissed: true },
+    });
+
+    // Dismissed takes precedence — don't change back to just "read"
+    if (alert?.isDismissed) return;
+
+    await prisma.alert.update({
+      where: { id: alertId },
+      data: { isRead: true },
+    });
+  }
+
+  /**
+   * Mark all unread alerts as read for an organization.
+   * Optionally scoped to specific outlet.
+   */
+  async markAllAsRead(organizationId: string, outletId?: string): Promise<number> {
+    const result = await prisma.alert.updateMany({
+      where: {
+        organizationId,
+        isRead: false,
+        isDismissed: false,
+        ...(outletId ? { outletId } : {}),
+      },
+      data: { isRead: true },
+    });
+
+    return result.count;
   }
 
   /**
    * Get the count of unread alerts for an organization.
    * Used for the notification badge in the UI header.
-   *
-   * TODO: Implement unread count query:
-   * 1. Count alerts WHERE organization_id = param AND status = 'unread'
-   * 2. Optionally filter by the current user's accessible outlets
-   *    (room managers should only see counts for their outlets)
-   * 3. Cache the result briefly to avoid excessive DB queries
-   *    on frequent UI polling
-   *
-   * @param organizationId - The organization to count unread alerts for
-   * @returns Number of unread alerts
    */
-  async getUnreadCount(organizationId: string): Promise<number> {
-    // TODO: Query alerts table for unread count via Prisma
-    // TODO: Apply RBAC filtering based on current user's role and outlet access
-    // TODO: Consider caching with short TTL for frequently polled counts
-    console.log(
-      `[AlertNotifier] Getting unread count for org ${organizationId}`
-    );
-    return 0;
+  async getUnreadCount(organizationId: string, outletId?: string): Promise<number> {
+    return prisma.alert.count({
+      where: {
+        organizationId,
+        isRead: false,
+        isDismissed: false,
+        ...(outletId ? { outletId } : {}),
+      },
+    });
   }
 
   /**
-   * Mark a specific alert as read.
-   *
-   * TODO: Implement mark-as-read:
-   * 1. Update the alert record status to 'read'
-   * 2. Record who read it and when
-   * 3. Broadcast the status change via Supabase Realtime
-   *    to update notification badges on other clients
-   * 4. Do not change status if alert is already 'dismissed'
-   *
-   * @param alertId - The ID of the alert to mark as read
+   * Get recent alerts for an organization, sorted by creation date.
+   * Used by the alerts feed on the dashboard.
    */
-  async markAsRead(alertId: string): Promise<void> {
-    // TODO: Fetch current alert status
-    // TODO: If already 'dismissed', skip update (dismissed takes precedence)
-    // TODO: Update alert status to 'read' via Prisma
-    // TODO: Set read_at timestamp and read_by user ID
-    // TODO: Broadcast updated unread count via Supabase Realtime
-    console.log(`[AlertNotifier] Marking alert as read: ${alertId}`);
+  async getRecentAlerts(
+    organizationId: string,
+    options: { limit?: number; outletId?: string; includeRead?: boolean } = {}
+  ) {
+    const { limit = 20, outletId, includeRead = false } = options;
+
+    return prisma.alert.findMany({
+      where: {
+        organizationId,
+        isDismissed: false,
+        ...(outletId ? { outletId } : {}),
+        ...(!includeRead ? { isRead: false } : {}),
+      },
+      include: {
+        outlet: { select: { name: true, slug: true } },
+        product: { select: { name: true, sku: true, category: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
   }
 }

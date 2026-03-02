@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import {
   Card,
@@ -6,113 +8,125 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { getAdminOverview } from "@/lib/queries/admin";
 
-const adminSections = [
-  {
-    title: "Data Uploads",
-    description:
-      "Upload purchasing, warehouse transfer, direct order, and sales data files.",
-    href: "/admin/uploads",
-    badge: "Import",
-  },
-  {
-    title: "Alert Configuration",
-    description:
-      "Configure alert rules, thresholds, and per-SKU overrides.",
-    href: "/admin/alerts",
-    badge: "Rules",
-  },
-];
+export default async function AdminPage() {
+  const overview = await getAdminOverview();
 
-const configSections = [
-  {
-    title: "Outlets",
-    description: "Manage outlet definitions, types, and groupings.",
-    count: "10 outlets",
-  },
-  {
-    title: "Outlet Groups",
-    description: "Create and manage outlet segment groups for reporting.",
-    count: "4 groups",
-  },
-  {
-    title: "Cost Goals",
-    description: "Set target cost percentages per outlet and segment.",
-    count: "10 goals set",
-  },
-  {
-    title: "Hotel Occupancy",
-    description: "Daily people counts, hotel guests, and restaurant covers.",
-    count: "365 days",
-  },
-  {
-    title: "User Management",
-    description: "Manage user accounts, roles, and access scopes.",
-    count: "15 users",
-  },
-  {
-    title: "Field Mappings",
-    description: "Saved column mappings for data import sources.",
-    count: "3 profiles",
-  },
-];
+  const sections = [
+    {
+      title: "Data Uploads",
+      description: "Upload and manage CSV/Excel data files",
+      href: "/admin/uploads",
+      count: overview.uploadCount,
+      countLabel: "total uploads",
+    },
+    {
+      title: "Alert Rules",
+      description: "Configure alert thresholds and notification rules",
+      href: "/admin/alerts",
+      count: overview.alertRuleCount,
+      countLabel: "active rules",
+    },
+    {
+      title: "Outlets",
+      description: "Manage outlet configurations and groupings",
+      href: "#",
+      count: overview.outletCount,
+      countLabel: "active outlets",
+    },
+    {
+      title: "Outlet Groups",
+      description: "Segment outlets for reporting (fine dining, casual, etc.)",
+      href: "#",
+      count: overview.outletGroupCount,
+      countLabel: "groups defined",
+    },
+    {
+      title: "Cost Goals",
+      description: "Set target cost percentages per outlet or category",
+      href: "#",
+      count: overview.costGoalCount,
+      countLabel: "goals configured",
+    },
+    {
+      title: "Users & Roles",
+      description: "Manage user accounts and role assignments",
+      href: "#",
+      count: overview.userCount,
+      countLabel: "active users",
+    },
+    {
+      title: "Field Mappings",
+      description: "Saved column mapping profiles for data imports",
+      href: "#",
+      count: overview.fieldMappingCount,
+      countLabel: "saved profiles",
+    },
+  ];
 
-export default function AdminPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Admin Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Admin Settings
+        </h1>
         <p className="text-muted-foreground">
-          Manage outlets, outlet groups, cost goals, hotel occupancy, and system
-          configuration.
+          Configure outlets, alert rules, cost goals, and system settings.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {adminSections.map((section) => (
-          <Link key={section.href} href={section.href}>
-            <Card className="transition-colors hover:bg-accent/50">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{section.title}</CardTitle>
-                  <Badge variant="default">{section.badge}</Badge>
-                </div>
-                <CardDescription>{section.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <span className="text-sm text-muted-foreground">
-                  Open &rarr;
-                </span>
-              </CardContent>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {sections.map((section) => {
+          const Wrapper = section.href !== "#" ? Link : "div";
+          return (
+            <Card
+              key={section.title}
+              className={
+                section.href !== "#"
+                  ? "hover:border-[#5ad196] transition-colors cursor-pointer"
+                  : ""
+              }
+            >
+              {section.href !== "#" ? (
+                <Link href={section.href} className="block">
+                  <CardHeader>
+                    <CardTitle className="text-lg text-[#06113e]">
+                      {section.title}
+                    </CardTitle>
+                    <CardDescription>{section.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-[#06113e]">
+                      {section.count}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {section.countLabel}
+                    </p>
+                  </CardContent>
+                </Link>
+              ) : (
+                <>
+                  <CardHeader>
+                    <CardTitle className="text-lg text-[#06113e]">
+                      {section.title}
+                    </CardTitle>
+                    <CardDescription>{section.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-[#06113e]">
+                      {section.count}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {section.countLabel}
+                    </p>
+                  </CardContent>
+                </>
+              )}
             </Card>
-          </Link>
-        ))}
+          );
+        })}
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>System Configuration</CardTitle>
-          <CardDescription>
-            Core settings for outlets, goals, occupancy, and users
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {configSections.map((section) => (
-              <div key={section.title} className="rounded-lg border p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium">{section.title}</h3>
-                  <Badge variant="secondary">{section.count}</Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {section.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

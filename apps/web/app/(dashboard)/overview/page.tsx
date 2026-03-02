@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,99 +8,232 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { VolumeChart } from "@/components/dashboard/VolumeChart";
+import { CostGoalChart } from "@/components/dashboard/CostGoalChart";
+import {
+  getOverviewMetrics,
+  getVolumeByMonth,
+  getTopProducts,
+  getRecentAlerts,
+  getCostVsGoalByOutlet,
+  getYoYComparison,
+} from "@/lib/queries/overview";
 
-const metrics = [
-  { label: "Total SKUs", value: "247", change: "+12 this month" },
-  { label: "Active Outlets", value: "10", change: "All operational" },
-  { label: "Compliance", value: "94%", change: "+2% from last month" },
-  { label: "Open Alerts", value: "3", change: "2 high priority" },
-];
+export default async function OverviewPage() {
+  const [metrics, volumeData, topProducts, alerts, costGoal, yoy] =
+    await Promise.all([
+      getOverviewMetrics(),
+      getVolumeByMonth(),
+      getTopProducts(8),
+      getRecentAlerts(5),
+      getCostVsGoalByOutlet(),
+      getYoYComparison(),
+    ]);
 
-const topProducts = [
-  { name: "Tito's Handmade Vodka", category: "Spirits", volume: "142 units" },
-  { name: "Caymus Cabernet Sauvignon", category: "Wine", volume: "98 units" },
-  { name: "Clase Azul Reposado", category: "Spirits", volume: "87 units" },
-  { name: "Veuve Clicquot Yellow Label", category: "Wine", volume: "76 units" },
-  { name: "Modelo Especial", category: "Beer", volume: "234 units" },
-];
+  const formatCurrency = (n: number) =>
+    n >= 1_000_000
+      ? `$${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1_000
+        ? `$${(n / 1_000).toFixed(0)}K`
+        : `$${n}`;
 
-export default function OverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
           Overview Dashboard
         </h1>
         <p className="text-muted-foreground">
-          Hotel-wide metrics, volume trends, cost analysis, and alerts at a
-          glance.
+          Hotel-wide metrics, volume trends, cost analysis, and alerts at a glance.
         </p>
       </div>
 
+      {/* Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((metric) => (
-          <Card key={metric.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {metric.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{metric.value}</div>
-              <p className="text-xs text-muted-foreground">{metric.change}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <MetricCard
+          label="Total SKUs"
+          value={metrics.totalProducts.toLocaleString()}
+          subtitle="Active products"
+        />
+        <MetricCard
+          label="Active Outlets"
+          value={metrics.activeOutlets}
+          subtitle="With orders in last 30 days"
+        />
+        <MetricCard
+          label="Compliance"
+          value={`${metrics.compliancePct}%`}
+          subtitle="Mandate items ordered"
+          trend={metrics.compliancePct >= 90 ? "up" : "down"}
+        />
+        <MetricCard
+          label="Open Alerts"
+          value={metrics.openAlerts}
+          subtitle="Unread alerts"
+          trend={metrics.openAlerts > 5 ? "down" : "up"}
+        />
       </div>
 
+      {/* YoY Comparison */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="YTD Volume"
+          value={metrics.totalProducts > 0 ? yoy.volume.current.toLocaleString() : "—"}
+          trend={yoy.volume.changePct >= 0 ? "up" : "down"}
+          trendValue={`${Math.abs(yoy.volume.changePct)}% vs last year`}
+        />
+        <MetricCard
+          label="Revenue (12mo)"
+          value={formatCurrency(metrics.revenue)}
+          subtitle="Total POS revenue"
+        />
+        <MetricCard
+          label="Cost (12mo)"
+          value={formatCurrency(metrics.cost)}
+          subtitle={`${metrics.costPct}% of revenue`}
+          trend={metrics.costPct > 25 ? "down" : "up"}
+        />
+        <MetricCard
+          label="YTD Cost Change"
+          value={`${yoy.cost.changePct >= 0 ? "+" : ""}${yoy.cost.changePct}%`}
+          trend={yoy.cost.changePct <= 0 ? "up" : "down"}
+          trendValue="vs last year"
+        />
+      </div>
+
+      {/* Charts Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
           <CardHeader>
-            <CardTitle>Volume Trends</CardTitle>
+            <CardTitle className="text-lg">Volume Trends</CardTitle>
             <CardDescription>
-              Monthly purchase volume across all outlets
+              Monthly purchase volume by category (last 12 months)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-md border border-dashed">
-              <p className="text-sm text-muted-foreground">
-                Recharts area chart will render here
-              </p>
-            </div>
+            <VolumeChart data={volumeData} />
           </CardContent>
         </Card>
 
         <Card className="col-span-3">
           <CardHeader>
-            <CardTitle>Top Products</CardTitle>
-            <CardDescription>Highest volume items this period</CardDescription>
+            <CardTitle className="text-lg">Top Products</CardTitle>
+            <CardDescription>Highest volume items (90 days)</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {topProducts.map((product, index) => (
                 <div
-                  key={product.name}
+                  key={product.id}
                   className="flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-muted-foreground">
+                    <span className="text-sm font-medium text-muted-foreground w-5">
                       {index + 1}.
                     </span>
                     <div>
                       <p className="text-sm font-medium leading-none">
                         {product.name}
                       </p>
-                      <Badge variant="secondary" className="mt-1">
-                        {product.category}
-                      </Badge>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="secondary" className="text-[10px] px-1.5">
+                          {product.category}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground">
+                          {product.sku}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {product.volume}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-sm font-semibold">
+                      {product.volume.toLocaleString()}
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatCurrency(product.totalCost)}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Cost vs Goal + Alerts */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle className="text-lg">Cost % vs Goal by Outlet</CardTitle>
+            <CardDescription>
+              Green = under goal, Red = over goal (last 90 days)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CostGoalChart data={costGoal} />
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-3">
+          <CardHeader>
+            <CardTitle className="text-lg">Recent Alerts</CardTitle>
+            <CardDescription>Unresolved alerts requiring attention</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {alerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                No open alerts
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {alerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex items-start gap-3 rounded-lg border p-3"
+                  >
+                    <div
+                      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
+                        alert.severity === "CRITICAL"
+                          ? "bg-red-500"
+                          : alert.severity === "WARNING"
+                            ? "bg-amber-500"
+                            : "bg-blue-500"
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-tight">
+                        {alert.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {alert.outlet?.name}
+                        {alert.product?.name
+                          ? ` — ${alert.product.name}`
+                          : ""}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        {new Date(alert.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={
+                        alert.severity === "CRITICAL"
+                          ? "destructive"
+                          : alert.severity === "WARNING"
+                            ? "warning"
+                            : "secondary"
+                      }
+                      className="shrink-0 text-[10px]"
+                    >
+                      {alert.severity}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

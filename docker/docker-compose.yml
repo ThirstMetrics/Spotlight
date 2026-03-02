@@ -34,6 +34,20 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      target: builder
+    container_name: spotlight-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://spotlight:${POSTGRES_PASSWORD:-spotlight_dev}@postgres:5432/spotlight
+    command: ["npx", "prisma", "migrate", "deploy", "--schema", "packages/db/prisma/schema.prisma"]
+    restart: "no"
+
   web:
     build:
       context: ..
@@ -47,10 +61,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://spotlight:${POSTGRES_PASSWORD:-spotlight_dev}@postgres:5432/spotlight
       REDIS_URL: redis://redis:6379
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-spotlight_jwt_secret_change_me}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
@@ -67,9 +84,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://spotlight:${POSTGRES_PASSWORD:-spotlight_dev}@postgres:5432/spotlight
-      NEXT_PUBLIC_APP_URL: http://localhost:3001
+      JWT_SECRET: ${JWT_SECRET:-spotlight_jwt_secret_change_me}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}

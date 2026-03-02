@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,130 +8,124 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { getSuppliers, getPartnerOverview } from "@/lib/queries/partners";
 
-const suppliers = [
-  {
-    name: "Diageo",
-    brands: "Johnnie Walker, Don Julio, Tanqueray",
-    outlets: 10,
-    volume: "$245,800",
-  },
-  {
-    name: "Pernod Ricard",
-    brands: "Absolut, Jameson, The Glenlivet",
-    outlets: 8,
-    volume: "$198,300",
-  },
-  {
-    name: "LVMH / Moet Hennessy",
-    brands: "Hennessy, Veuve Clicquot, Dom Perignon",
-    outlets: 7,
-    volume: "$312,500",
-  },
-  {
-    name: "Bacardi Limited",
-    brands: "Bacardi, Grey Goose, Patron",
-    outlets: 9,
-    volume: "$167,400",
-  },
-  {
-    name: "Brown-Forman",
-    brands: "Jack Daniel's, Woodford Reserve, Old Forester",
-    outlets: 8,
-    volume: "$134,200",
-  },
-];
+export default async function SuppliersPage() {
+  const [suppliers, overview] = await Promise.all([
+    getSuppliers(),
+    getPartnerOverview(),
+  ]);
 
-export default function SuppliersPage() {
+  const formatCurrency = (n: number) =>
+    n >= 1_000_000
+      ? `$${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1_000
+        ? `$${(n / 1_000).toFixed(0)}K`
+        : `$${n.toFixed(0)}`;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Suppliers</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Suppliers
+        </h1>
         <p className="text-muted-foreground">
           Supplier performance aggregated across all distributors.
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Suppliers
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">18</div>
-            <p className="text-xs text-muted-foreground">
-              Across all distributors
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Multi-Distributor
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">7</div>
-            <p className="text-xs text-muted-foreground">
-              Supplied through 2+ distributors
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Supplier Volume
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$1,058,200</div>
-            <p className="text-xs text-muted-foreground">Current period</p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Total Suppliers"
+          value={overview.supplierCount}
+          subtitle="Across all distributors"
+        />
+        <MetricCard
+          label="Multi-Distributor"
+          value={overview.multiDistributorSuppliers}
+          subtitle="Supplied through 2+ distributors"
+        />
+        <MetricCard
+          label="Total Supplier Volume"
+          value={formatCurrency(overview.totalVolume)}
+          subtitle="Current period"
+        />
       </div>
 
+      {/* Supplier Performance Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Supplier Performance</CardTitle>
+          <CardTitle className="text-lg">Supplier Performance</CardTitle>
           <CardDescription>
             Volume, outlet coverage, and brand portfolio by supplier
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-3 text-left font-medium">Supplier</th>
-                  <th className="px-4 py-3 text-left font-medium">
-                    Key Brands
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium">Outlets</th>
-                  <th className="px-4 py-3 text-right font-medium">Volume</th>
-                </tr>
-              </thead>
-              <tbody>
-                {suppliers.map((supplier) => (
-                  <tr key={supplier.name} className="border-b">
-                    <td className="px-4 py-3 font-medium">{supplier.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {supplier.brands}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Badge variant="secondary">
-                        {supplier.outlets} outlets
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium">
-                      {supplier.volume}
-                    </td>
+          {suppliers.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No supplier data available. Upload order data to see supplier
+              metrics.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Supplier
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Key Products
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Products
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Distributors
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Outlets
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Volume
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {suppliers.map((supplier) => (
+                    <tr
+                      key={supplier.id}
+                      className="border-b hover:bg-gray-50/30"
+                    >
+                      <td className="px-4 py-3 font-medium text-[#06113e]">
+                        {supplier.name}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {supplier.topProducts.join(", ") || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {supplier.productCount}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Badge variant="secondary">
+                          {supplier.distributorCount}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Badge variant="secondary">
+                          {supplier.outletCount} outlets
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {formatCurrency(supplier.volume)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

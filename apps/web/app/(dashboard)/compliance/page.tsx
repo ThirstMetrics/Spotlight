@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,149 +8,192 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { StatusBadge } from "@/components/dashboard/StatusBadge";
+import {
+  getComplianceOverview,
+  getComplianceMatrix,
+  getComplianceByOutlet,
+} from "@/lib/queries/compliance";
 
-const sampleCompliance = [
-  {
-    outlet: "Carversteak",
-    mandate: "National Spirits Program",
-    product: "Grey Goose Vodka 1L",
-    status: "compliant",
-    lastOrder: "2026-02-18",
-  },
-  {
-    outlet: "Bar Zazu",
-    mandate: "National Spirits Program",
-    product: "Hendrick's Gin 750ml",
-    status: "compliant",
-    lastOrder: "2026-02-22",
-  },
-  {
-    outlet: "Redtail",
-    mandate: "Wine Portfolio",
-    product: "Opus One 2021",
-    status: "non-compliant",
-    lastOrder: "Never ordered",
-  },
-  {
-    outlet: "Pool Bar & Grill",
-    mandate: "Beer Program",
-    product: "Corona Extra 12pk",
-    status: "compliant",
-    lastOrder: "2026-02-25",
-  },
-  {
-    outlet: "Dawg House Saloon",
-    mandate: "National Spirits Program",
-    product: "Don Julio 1942",
-    status: "pending",
-    lastOrder: "2026-01-10",
-  },
-];
+export default async function CompliancePage() {
+  const [overview, matrix, byOutlet] = await Promise.all([
+    getComplianceOverview(),
+    getComplianceMatrix(),
+    getComplianceByOutlet(),
+  ]);
 
-function StatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case "compliant":
-      return <Badge variant="success">Compliant</Badge>;
-    case "non-compliant":
-      return <Badge variant="destructive">Non-Compliant</Badge>;
-    case "pending":
-      return <Badge variant="warning">Pending</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
-
-export default function CompliancePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
           Compliance Tracker
         </h1>
         <p className="text-muted-foreground">
-          Track mandate compliance across all outlets. Matrix view showing
-          ordered vs not-ordered status.
+          Track mandate compliance across all outlets. Matrix view showing ordered
+          vs not-ordered status.
         </p>
       </div>
 
+      {/* Overview Metrics */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Overall Compliance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">94%</div>
-            <p className="text-xs text-muted-foreground">
-              47 of 50 items ordered
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Active Mandates
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">5</div>
-            <p className="text-xs text-muted-foreground">
-              Across all outlet groups
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Non-Compliant Items
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">3</div>
-            <p className="text-xs text-muted-foreground">Require attention</p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Overall Compliance"
+          value={`${overview.compliancePct}%`}
+          subtitle={`${overview.compliantItems} of ${overview.totalItems} items ordered`}
+          trend={overview.compliancePct >= 90 ? "up" : "down"}
+        />
+        <MetricCard
+          label="Active Mandates"
+          value={overview.activeMandates}
+          subtitle="Across all outlet groups"
+        />
+        <MetricCard
+          label="Non-Compliant Items"
+          value={overview.nonCompliantCount}
+          subtitle="Require attention"
+          trend={overview.nonCompliantCount > 0 ? "down" : "up"}
+        />
       </div>
 
+      {/* Compliance by Outlet */}
       <Card>
         <CardHeader>
-          <CardTitle>Compliance Matrix</CardTitle>
+          <CardTitle className="text-lg">Compliance by Outlet</CardTitle>
+          <CardDescription>
+            Each outlet&apos;s mandate compliance rate
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {byOutlet.map((outlet) => (
+              <div
+                key={outlet.id}
+                className="flex items-center justify-between rounded-lg border p-3"
+              >
+                <div>
+                  <p className="font-medium text-[#06113e]">{outlet.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {outlet.compliant}/{outlet.total} items
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-16 h-2 rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        outlet.pct >= 90
+                          ? "bg-[#5ad196]"
+                          : outlet.pct >= 70
+                            ? "bg-amber-400"
+                            : "bg-red-400"
+                      }`}
+                      style={{ width: `${outlet.pct}%` }}
+                    />
+                  </div>
+                  <span
+                    className={`text-sm font-bold ${
+                      outlet.pct >= 90
+                        ? "text-[#5ad196]"
+                        : outlet.pct >= 70
+                          ? "text-amber-600"
+                          : "text-red-600"
+                    }`}
+                  >
+                    {outlet.pct}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Compliance Matrix */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Compliance Matrix</CardTitle>
           <CardDescription>
             Mandate compliance status by outlet and product
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-3 text-left font-medium">Outlet</th>
-                  <th className="px-4 py-3 text-left font-medium">Mandate</th>
-                  <th className="px-4 py-3 text-left font-medium">Product</th>
-                  <th className="px-4 py-3 text-left font-medium">Status</th>
-                  <th className="px-4 py-3 text-left font-medium">
-                    Last Order
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sampleCompliance.map((row, index) => (
-                  <tr key={index} className="border-b">
-                    <td className="px-4 py-3 font-medium">{row.outlet}</td>
-                    <td className="px-4 py-3">{row.mandate}</td>
-                    <td className="px-4 py-3">{row.product}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={row.status} />
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {row.lastOrder}
-                    </td>
+          {matrix.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No mandate compliance data found. Upload mandate data to start tracking.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="px-3 py-2.5 text-left font-medium text-gray-600">
+                      Outlet
+                    </th>
+                    <th className="px-3 py-2.5 text-left font-medium text-gray-600">
+                      Mandate
+                    </th>
+                    <th className="px-3 py-2.5 text-left font-medium text-gray-600">
+                      Product
+                    </th>
+                    <th className="px-3 py-2.5 text-left font-medium text-gray-600">
+                      Category
+                    </th>
+                    <th className="px-3 py-2.5 text-center font-medium text-gray-600">
+                      Status
+                    </th>
+                    <th className="px-3 py-2.5 text-right font-medium text-gray-600">
+                      Last Qty
+                    </th>
+                    <th className="px-3 py-2.5 text-left font-medium text-gray-600">
+                      Last Order
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {matrix.map((row) => (
+                    <tr key={row.id} className="border-b hover:bg-gray-50/30">
+                      <td className="px-3 py-2.5 font-medium text-[#06113e]">
+                        {row.outletName}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {row.mandateName}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div>
+                          <p className="font-medium">{row.productName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.productSku}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {row.category}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <StatusBadge
+                          status={row.isCompliant ? "success" : "danger"}
+                          label={row.isCompliant ? "Compliant" : "Non-Compliant"}
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        {row.lastOrderQuantity ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {row.lastOrderDate
+                          ? new Date(row.lastOrderDate).toLocaleDateString(
+                              "en-US",
+                              { month: "short", day: "numeric", year: "numeric" }
+                            )
+                          : "Never ordered"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

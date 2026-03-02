@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,149 +8,154 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { getCatalogOverview, getCatalogProducts } from "@/lib/queries/catalog";
 
-const sampleProducts = [
-  {
-    sku: "SP-001",
-    name: "Grey Goose Vodka",
-    category: "Spirits",
-    size: "1L",
-    distributors: 2,
-    substitution: null,
-  },
-  {
-    sku: "SP-002",
-    name: "Hendrick's Gin",
-    category: "Spirits",
-    size: "750ml",
-    distributors: 1,
-    substitution: null,
-  },
-  {
-    sku: "WN-015",
-    name: "Caymus Cabernet Sauvignon",
-    category: "Wine",
-    size: "750ml",
-    distributors: 1,
-    substitution: "Silver Oak Cabernet Sauvignon",
-  },
-  {
-    sku: "BR-008",
-    name: "Modelo Especial",
-    category: "Beer",
-    size: "12pk",
-    distributors: 2,
-    substitution: null,
-  },
-  {
-    sku: "SK-003",
-    name: "Dassai 23 Junmai Daiginjo",
-    category: "Sake",
-    size: "720ml",
-    distributors: 1,
-    substitution: "Kubota Manju",
-  },
-];
+export default async function CatalogPage() {
+  const [overview, products] = await Promise.all([
+    getCatalogOverview(),
+    getCatalogProducts(),
+  ]);
 
-export default function CatalogPage() {
+  const formatCurrency = (n: number) => `$${n.toFixed(2)}`;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Product Catalog</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Product Catalog
+        </h1>
         <p className="text-muted-foreground">
-          Master product list with substitution tracking and distributor
-          coverage.
+          Master product catalog with distributor coverage and substitutions.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total SKUs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">247</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Spirits</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">112</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Wine</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">87</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Beer / Sake</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">48</div>
-          </CardContent>
-        </Card>
+      {/* Metric Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <MetricCard label="Total SKUs" value={overview.total} />
+        <MetricCard label="Spirits" value={overview.spirits} />
+        <MetricCard label="Wine" value={overview.wine} />
+        <MetricCard label="Beer" value={overview.beer} />
+        <MetricCard
+          label="Sake & N/A"
+          value={overview.sake + overview.nonAlcoholic}
+        />
       </div>
 
+      {/* Product Catalog Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Product List</CardTitle>
+          <CardTitle className="text-lg">Product Catalog</CardTitle>
           <CardDescription>
-            All products with category, size, distributor coverage, and
-            substitution info
+            {products.length} active products with distributor pricing
+            {overview.substitutions > 0 &&
+              ` — ${overview.substitutions} substitution rules defined`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-3 text-left font-medium">SKU</th>
-                  <th className="px-4 py-3 text-left font-medium">Product</th>
-                  <th className="px-4 py-3 text-left font-medium">Category</th>
-                  <th className="px-4 py-3 text-left font-medium">Size</th>
-                  <th className="px-4 py-3 text-right font-medium">
-                    Distributors
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium">
-                    Substitution
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sampleProducts.map((product) => (
-                  <tr key={product.sku} className="border-b">
-                    <td className="px-4 py-3 font-mono text-xs">
-                      {product.sku}
-                    </td>
-                    <td className="px-4 py-3 font-medium">{product.name}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="secondary">{product.category}</Badge>
-                    </td>
-                    <td className="px-4 py-3">{product.size}</td>
-                    <td className="px-4 py-3 text-right">
-                      {product.distributors}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {product.substitution || "---"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex items-center justify-center rounded-md border border-dashed p-4">
-            <p className="text-sm text-muted-foreground">
-              Full AG Grid catalog table with search and filtering will render
-              here
+          {products.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No products in the catalog. Products are created during data
+              ingestion or can be added manually.
             </p>
-          </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Product
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      SKU
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Size
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Distributors
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Avg Cost
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Substitutions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => (
+                    <tr
+                      key={product.id}
+                      className="border-b hover:bg-gray-50/30"
+                    >
+                      <td className="px-4 py-3 font-medium text-[#06113e]">
+                        {product.name}
+                        {product.subcategory && (
+                          <span className="text-xs text-muted-foreground block">
+                            {product.subcategory}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
+                        {product.sku}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary" className="text-xs">
+                          {product.category}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {product.size ?? "—"}
+                        {product.unit ? ` ${product.unit}` : ""}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {product.distributorCount > 0 ? (
+                          <span
+                            className="cursor-help"
+                            title={product.distributors
+                              .map((d) => `${d.name} (${d.supplierName})`)
+                              .join(", ")}
+                          >
+                            {product.distributorCount}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {product.avgCost > 0
+                          ? formatCurrency(product.avgCost)
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {product.substitutions.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {product.substitutions.map((sub) => (
+                              <Badge
+                                key={sub.id}
+                                variant="outline"
+                                className="text-xs"
+                              >
+                                {sub.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">
+                            None
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

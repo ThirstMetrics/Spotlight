@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,150 +8,193 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { getUploadHistory, getUploadStats } from "@/lib/queries/admin";
 
-const uploadTypes = [
-  {
-    type: "Purchases",
-    description: "BirchStreet, Stratton Warren, or Oracle purchase order exports",
-    lastUpload: "2026-02-28",
-    format: "CSV / Excel",
-  },
-  {
-    type: "Warehouse Transfers",
-    description: "Items transferred from central warehouse to outlets",
-    lastUpload: "2026-02-27",
-    format: "CSV / Excel",
-  },
-  {
-    type: "Direct Orders",
-    description: "Items shipped directly from vendors to outlets",
-    lastUpload: "2026-02-25",
-    format: "CSV / Excel",
-  },
-  {
-    type: "Sales Data",
-    description: "POS exports from Micros, Agilysys, or Toast",
-    lastUpload: "2026-02-28",
-    format: "Excel",
-  },
-];
+const STATUS_COLORS: Record<string, string> = {
+  COMPLETED: "bg-[#5ad196] text-white",
+  PROCESSING: "bg-blue-500 text-white",
+  PENDING: "bg-amber-500 text-white",
+  FAILED: "bg-red-500 text-white",
+};
 
-const recentUploads = [
-  {
-    filename: "birchstreet_feb_2026.xlsx",
-    type: "Purchases",
-    records: 1247,
-    status: "processed",
-    date: "2026-02-28",
-  },
-  {
-    filename: "warehouse_transfers_wk8.csv",
-    type: "Warehouse Transfers",
-    records: 342,
-    status: "processed",
-    date: "2026-02-27",
-  },
-  {
-    filename: "micros_sales_feb.xlsx",
-    type: "Sales Data",
-    records: 4521,
-    status: "processed",
-    date: "2026-02-28",
-  },
-  {
-    filename: "direct_orders_feb.csv",
-    type: "Direct Orders",
-    records: 56,
-    status: "warnings",
-    date: "2026-02-25",
-  },
-];
+const TYPE_LABELS: Record<string, string> = {
+  WAREHOUSE_TRANSFER: "Warehouse Transfer",
+  DIRECT_ORDER: "Direct Order",
+  SALES_DATA: "Sales Data",
+  DISTRIBUTOR_CHART: "Distributor Chart",
+};
 
-export default function UploadsPage() {
+export default async function UploadsPage() {
+  const [uploads, stats] = await Promise.all([
+    getUploadHistory(),
+    getUploadStats(),
+  ]);
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Data Uploads</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Data Uploads
+        </h1>
         <p className="text-muted-foreground">
-          Upload purchasing, warehouse transfer, direct order, and sales data
-          files.
+          Upload CSV/Excel files for warehouse transfers, direct orders, and
+          sales data.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {uploadTypes.map((upload) => (
-          <Card key={upload.type}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{upload.type}</CardTitle>
-                <Badge variant="secondary">{upload.format}</Badge>
-              </div>
-              <CardDescription>{upload.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex h-24 flex-1 items-center justify-center rounded-md border border-dashed">
-                  <p className="text-sm text-muted-foreground">
-                    Drop file here or click to upload
-                  </p>
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Last upload: {upload.lastUpload}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Total Uploads"
+          value={stats.total}
+          subtitle={`${stats.recent} in last 30 days`}
+        />
+        <MetricCard
+          label="Completed"
+          value={stats.completed}
+          subtitle={`${stats.totalRecords.toLocaleString()} records processed`}
+        />
+        <MetricCard
+          label="Failed"
+          value={stats.failed}
+          trend={stats.failed > 0 ? "down" : undefined}
+        />
+        <MetricCard
+          label="Records Processed"
+          value={stats.totalRecords.toLocaleString()}
+          subtitle="Across all uploads"
+        />
       </div>
 
+      {/* Upload Types */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {(
+          [
+            "WAREHOUSE_TRANSFER",
+            "DIRECT_ORDER",
+            "SALES_DATA",
+            "DISTRIBUTOR_CHART",
+          ] as const
+        ).map((type) => {
+          const count = uploads.filter((u) => u.uploadType === type).length;
+          const lastUpload = uploads.find((u) => u.uploadType === type);
+          return (
+            <Card key={type} className="hover:border-[#5ad196] transition-colors">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {TYPE_LABELS[type]}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold text-[#06113e]">
+                  {count} uploads
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {lastUpload
+                    ? `Last: ${new Date(lastUpload.createdAt).toLocaleDateString()}`
+                    : "No uploads yet"}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Upload History */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Uploads</CardTitle>
+          <CardTitle className="text-lg">Upload History</CardTitle>
           <CardDescription>
-            Upload history with processing status and record counts
+            Recent file uploads and their processing status
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-3 text-left font-medium">File</th>
-                  <th className="px-4 py-3 text-left font-medium">Type</th>
-                  <th className="px-4 py-3 text-right font-medium">Records</th>
-                  <th className="px-4 py-3 text-left font-medium">Status</th>
-                  <th className="px-4 py-3 text-right font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentUploads.map((upload) => (
-                  <tr key={upload.filename} className="border-b">
-                    <td className="px-4 py-3 font-mono text-xs">
-                      {upload.filename}
-                    </td>
-                    <td className="px-4 py-3">{upload.type}</td>
-                    <td className="px-4 py-3 text-right">
-                      {upload.records.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        variant={
-                          upload.status === "processed"
-                            ? "success"
-                            : "warning"
-                        }
-                      >
-                        {upload.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">
-                      {upload.date}
-                    </td>
+          {uploads.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No uploads yet. Use the upload form above to import data files.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      File Name
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Source
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Records
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Uploaded By
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Date
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {uploads.map((upload) => (
+                    <tr
+                      key={upload.id}
+                      className="border-b hover:bg-gray-50/30"
+                    >
+                      <td className="px-4 py-3 font-medium text-[#06113e]">
+                        {upload.fileName}
+                        <span className="text-xs text-muted-foreground ml-1">
+                          ({(upload.fileSize / 1024).toFixed(0)} KB)
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary" className="text-xs">
+                          {TYPE_LABELS[upload.uploadType] ?? upload.uploadType}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {upload.uploadSource}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[upload.status] ?? "bg-gray-200"}`}
+                        >
+                          {upload.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {upload.recordsProcessed != null ? (
+                          <span>
+                            {upload.recordsProcessed}
+                            {(upload.recordsFailed ?? 0) > 0 && (
+                              <span className="text-red-500 ml-1">
+                                ({upload.recordsFailed} failed)
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {upload.uploader.name}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {new Date(upload.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

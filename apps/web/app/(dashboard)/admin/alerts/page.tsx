@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,173 +8,177 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { getAlertRules } from "@/lib/queries/admin";
+import { prisma } from "@spotlight/db";
 
-const alertRules = [
-  {
-    name: "Mandate Item Not Ordered",
-    category: "Compliance",
-    threshold: "7 days",
-    description: "Alert when a mandated item has not been ordered within the configured timeframe",
-    enabled: true,
-  },
-  {
-    name: "Pull-Through Above Average",
-    category: "Pull-Through",
-    threshold: ">120% of 90-day avg",
-    description: "Alert when an item's pull-through exceeds the rolling 90-day average",
-    enabled: true,
-  },
-  {
-    name: "Pull-Through Below Average",
-    category: "Pull-Through",
-    threshold: "<80% of 90-day avg",
-    description: "Alert when an item's pull-through falls below the rolling 90-day average",
-    enabled: true,
-  },
-  {
-    name: "Low Inventory",
-    category: "Inventory",
-    threshold: "<5 days supply",
-    description: "Alert when days-on-hand falls below the configured threshold per SKU",
-    enabled: true,
-  },
-  {
-    name: "Price Discrepancy",
-    category: "Price",
-    threshold: "Any variance",
-    description: "Alert when the same product has different prices across outlets",
-    enabled: true,
-  },
-  {
-    name: "Price Change",
-    category: "Price",
-    threshold: ">5% change",
-    description: "Alert when a product price changes more than threshold from previous order",
-    enabled: false,
-  },
-  {
-    name: "Cost Goal Exceeded",
-    category: "Cost Goal",
-    threshold: "Above target",
-    description: "Alert when an outlet or segment cost percentage exceeds the target goal",
-    enabled: true,
-  },
-  {
-    name: "New Direct Item",
-    category: "Direct",
-    threshold: "First appearance",
-    description: "Alert when a new item appears at an outlet via direct order",
-    enabled: true,
-  },
-];
+const TYPE_LABELS: Record<string, string> = {
+  MANDATE_COMPLIANCE: "Mandate Compliance",
+  PULL_THROUGH_HIGH: "Pull-Through High",
+  PULL_THROUGH_LOW: "Pull-Through Low",
+  DAYS_OF_INVENTORY: "Days of Inventory",
+  NEW_DIRECT_ITEM: "New Direct Item",
+  PRICE_DISCREPANCY: "Price Discrepancy",
+  PRICE_CHANGE: "Price Change",
+  COST_GOAL_EXCEEDED: "Cost Goal Exceeded",
+};
 
-export default function AlertConfigPage() {
+const TYPE_CATEGORIES: Record<string, string> = {
+  MANDATE_COMPLIANCE: "Compliance",
+  PULL_THROUGH_HIGH: "Inventory",
+  PULL_THROUGH_LOW: "Inventory",
+  DAYS_OF_INVENTORY: "Inventory",
+  NEW_DIRECT_ITEM: "Inventory",
+  PRICE_DISCREPANCY: "Price",
+  PRICE_CHANGE: "Price",
+  COST_GOAL_EXCEEDED: "Cost",
+};
+
+export default async function AlertRulesPage() {
+  const [rules, alertStats] = await Promise.all([
+    getAlertRules(),
+    Promise.all([
+      prisma.alertRule.count({ where: { isEnabled: true } }),
+      prisma.alert.count({ where: { isDismissed: false, isRead: false } }),
+      prisma.alert.count(),
+      prisma.alert.count({ where: { isDismissed: true } }),
+    ]),
+  ]);
+
+  const [enabledRules, activeAlerts, totalAlerts, resolvedAlerts] = alertStats;
+  const resolutionRate =
+    totalAlerts > 0 ? Math.round((resolvedAlerts / totalAlerts) * 100) : 0;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Alert Configuration
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Alert Rules
         </h1>
         <p className="text-muted-foreground">
-          Configure alert rules, thresholds, and per-SKU overrides.
+          Configure alert thresholds and manage notification rules.
         </p>
       </div>
 
+      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Active Rules
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">7</div>
-            <p className="text-xs text-muted-foreground">
-              Of 8 total rules
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              SKU Overrides
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">14</div>
-            <p className="text-xs text-muted-foreground">
-              Custom thresholds per product
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Alerts Generated
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">156</div>
-            <p className="text-xs text-muted-foreground">This month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Resolution Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">87%</div>
-            <p className="text-xs text-muted-foreground">
-              Resolved within 48 hours
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Active Rules"
+          value={enabledRules}
+          subtitle={`${rules.length} total configured`}
+        />
+        <MetricCard
+          label="Unread Alerts"
+          value={activeAlerts}
+          subtitle="Pending review"
+        />
+        <MetricCard
+          label="Total Generated"
+          value={totalAlerts}
+          subtitle="All time"
+        />
+        <MetricCard
+          label="Resolution Rate"
+          value={`${resolutionRate}%`}
+          subtitle={`${resolvedAlerts} resolved`}
+        />
       </div>
 
+      {/* Alert Rules Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Alert Rules</CardTitle>
+          <CardTitle className="text-lg">Configured Alert Rules</CardTitle>
           <CardDescription>
-            All configurable alert rules with thresholds and status
+            Rules determine when alerts are generated based on data thresholds
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {alertRules.map((rule) => (
-              <div
-                key={rule.name}
-                className="flex items-center justify-between rounded-lg border p-4"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{rule.name}</p>
-                    <Badge variant="secondary">{rule.category}</Badge>
-                    {!rule.enabled && (
-                      <Badge variant="outline">Disabled</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {rule.description}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <Badge
-                    variant={rule.enabled ? "success" : "outline"}
-                  >
-                    {rule.threshold}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex items-center justify-center rounded-md border border-dashed p-4">
-            <p className="text-sm text-muted-foreground">
-              Rule editor form with threshold configuration and SKU override
-              management will render here
+          {rules.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No alert rules configured. Alert rules are automatically created
+              with default thresholds.
             </p>
-          </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Rule Type
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Threshold
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Scope
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Active Alerts
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Created By
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rules.map((rule) => (
+                    <tr
+                      key={rule.id}
+                      className="border-b hover:bg-gray-50/30"
+                    >
+                      <td className="px-4 py-3 font-medium text-[#06113e]">
+                        {TYPE_LABELS[rule.alertType] ?? rule.alertType}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary" className="text-xs">
+                          {TYPE_CATEGORIES[rule.alertType] ?? "Other"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {rule.thresholdValue != null
+                          ? `${rule.thresholdValue}${rule.thresholdUnit ?? ""}`
+                          : "Default"}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {rule.appliesToProduct
+                          ? rule.appliesToProduct
+                          : rule.appliesToOutlet}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            rule.isEnabled
+                              ? "bg-[#5ad196] text-white"
+                              : "bg-gray-200 text-gray-600"
+                          }`}
+                        >
+                          {rule.isEnabled ? "Enabled" : "Disabled"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {rule.activeAlerts > 0 ? (
+                          <span className="text-amber-600">
+                            {rule.activeAlerts}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {rule.createdBy}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

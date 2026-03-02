@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -5,177 +7,146 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import {
+  getAnalyticsOverview,
+  getRecentSessions,
+  getTopPages,
+} from "@/lib/queries/analytics";
 
-const recentSessions = [
-  {
-    user: "Southern Glazer's (Distributor)",
-    action: "Viewed sales report",
-    duration: "12 min",
-    time: "1 hour ago",
-  },
-  {
-    user: "Diageo (Supplier)",
-    action: "Exported product placement data",
-    duration: "8 min",
-    time: "3 hours ago",
-  },
-  {
-    user: "Republic National (Distributor)",
-    action: "Downloaded volume report",
-    duration: "5 min",
-    time: "5 hours ago",
-  },
-  {
-    user: "LVMH / Moet Hennessy (Supplier)",
-    action: "Viewed outlet map",
-    duration: "15 min",
-    time: "1 day ago",
-  },
-  {
-    user: "Bacardi Limited (Supplier)",
-    action: "Viewed YoY comparison",
-    duration: "10 min",
-    time: "1 day ago",
-  },
-];
+export default async function AnalyticsPage() {
+  const [overview, sessions, topPages] = await Promise.all([
+    getAnalyticsOverview(),
+    getRecentSessions(),
+    getTopPages(),
+  ]);
 
-export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
           Portal Analytics
         </h1>
         <p className="text-muted-foreground">
-          Track partner portal usage — who is logging in, what they are viewing,
-          and export activity.
+          Track portal usage, login activity, and report engagement.
         </p>
       </div>
 
+      {/* Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Active Sessions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">Currently online</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Logins This Week
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground">
-              +15% vs last week
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Reports Viewed
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">67</div>
-            <p className="text-xs text-muted-foreground">This month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Exports Downloaded
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">18</div>
-            <p className="text-xs text-muted-foreground">
-              Excel and CSV files
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Active Sessions"
+          value={overview.activeSessions}
+          subtitle="Last 24 hours"
+        />
+        <MetricCard
+          label="Logins This Week"
+          value={overview.loginsThisWeek}
+          subtitle="Last 7 days"
+        />
+        <MetricCard
+          label="Page Views (30d)"
+          value={overview.totalInteractions30d}
+          subtitle="Total interactions"
+        />
+        <MetricCard
+          label="Exports (30d)"
+          value={overview.exportCount30d}
+          subtitle="Reports downloaded"
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Top Pages */}
         <Card>
           <CardHeader>
-            <CardTitle>Login Trends</CardTitle>
-            <CardDescription>
-              Partner portal login frequency over the past 30 days
-            </CardDescription>
+            <CardTitle className="text-lg">Most Viewed Pages</CardTitle>
+            <CardDescription>Top pages in the last 30 days</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-md border border-dashed">
-              <p className="text-sm text-muted-foreground">
-                Recharts line chart will render here
+            {topPages.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No page view data yet.
               </p>
-            </div>
+            ) : (
+              <div className="space-y-3">
+                {topPages.map((page, i) => (
+                  <div
+                    key={page.pagePath}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-muted-foreground w-5">
+                        {i + 1}.
+                      </span>
+                      <span className="text-sm font-mono text-[#06113e]">
+                        {page.pagePath}
+                      </span>
+                    </div>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {page.views} views
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
+        {/* Recent Sessions */}
         <Card>
           <CardHeader>
-            <CardTitle>Most Viewed Pages</CardTitle>
+            <CardTitle className="text-lg">Recent Logins</CardTitle>
             <CardDescription>
-              Top pages accessed by partner portal users
+              Latest portal sessions
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex h-64 items-center justify-center rounded-md border border-dashed">
-              <p className="text-sm text-muted-foreground">
-                Recharts horizontal bar chart will render here
+            {sessions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No login sessions recorded yet.
               </p>
-            </div>
+            ) : (
+              <div className="space-y-3">
+                {sessions.slice(0, 10).map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex items-center justify-between border-b pb-2 last:border-0"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[#06113e]">
+                        {session.user.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {session.user.email}
+                        {session.user.userRoles[0] && (
+                          <span className="ml-1 text-gray-400">
+                            ({session.user.userRoles[0].role.name})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(session.loginAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(session.loginAt).toLocaleTimeString("en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>
-            Latest partner portal interactions and actions
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-3 text-left font-medium">User</th>
-                  <th className="px-4 py-3 text-left font-medium">Action</th>
-                  <th className="px-4 py-3 text-right font-medium">
-                    Duration
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentSessions.map((session, index) => (
-                  <tr key={index} className="border-b">
-                    <td className="px-4 py-3 font-medium">{session.user}</td>
-                    <td className="px-4 py-3">{session.action}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Badge variant="secondary">{session.duration}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">
-                      {session.time}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

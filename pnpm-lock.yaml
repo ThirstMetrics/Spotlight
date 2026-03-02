@@ -204,6 +204,10 @@ importers:
         version: 5.9.3
 
   packages/alert-engine:
+    dependencies:
+      '@spotlight/db':
+        specifier: workspace:*
+        version: link:../db
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -217,6 +221,9 @@ importers:
 
   packages/data-engine:
     dependencies:
+      '@spotlight/db':
+        specifier: workspace:*
+        version: link:../db
       papaparse:
         specifier: ^5.4.0
         version: 5.5.3

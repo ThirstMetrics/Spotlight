@@ -1,31 +1,25 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/dashboard/StatusBadge";
+import { getOutlets } from "@/lib/queries/outlets";
 
-const outlets = [
-  { id: "carversteak", name: "Carversteak", type: "Fine Dining" },
-  { id: "wallys", name: "Wally's Wine & Spirits", type: "Wine Bar" },
-  { id: "crossroads", name: "Crossroads Kitchen", type: "Restaurant" },
-  { id: "bar-zazu", name: "Bar Zazu", type: "Cocktail Bar" },
-  { id: "redtail", name: "Redtail", type: "Rooftop Bar" },
-  { id: "famous-foods", name: "Famous Foods Street Eats", type: "Food Hall" },
-  { id: "dawg-house", name: "Dawg House Saloon", type: "Bar & Grill" },
-  { id: "alle-lounge", name: "Alle Lounge on 66", type: "Lounge" },
-  { id: "gatsbys", name: "Gatsby's Cocktail Lounge", type: "Nightlife" },
-  { id: "pool-bar", name: "Pool Bar & Grill", type: "Pool" },
-];
+export default async function OutletsPage() {
+  const outlets = await getOutlets();
 
-export default function OutletsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Outlets</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Outlets
+        </h1>
         <p className="text-muted-foreground">
           View and manage all outlets across the property.
         </p>
@@ -33,21 +27,62 @@ export default function OutletsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {outlets.map((outlet) => (
-          <Link key={outlet.id} href={`/outlets/${outlet.id}`}>
-            <Card className="transition-colors hover:bg-accent/50">
-              <CardHeader>
+          <Link key={outlet.id} href={`/outlets/${outlet.slug}`}>
+            <Card className="transition-all hover:shadow-md hover:border-[#5ad196]/40 h-full">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{outlet.name}</CardTitle>
-                  <Badge variant="secondary">{outlet.type}</Badge>
+                  <CardTitle className="text-lg text-[#06113e]">
+                    {outlet.name}
+                  </CardTitle>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {outlet.type}
+                  </Badge>
                 </div>
-                <CardDescription>
-                  Inventory, compliance, and sales data
-                </CardDescription>
+                <p className="text-xs text-muted-foreground">
+                  {outlet.groupName}
+                  {outlet.managerName ? ` — ${outlet.managerName}` : ""}
+                </p>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">View Details</span>
-                  <span className="text-muted-foreground">&rarr;</span>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className="text-lg font-bold text-[#06113e]">
+                      {outlet.productCount}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Products</p>
+                  </div>
+                  <div>
+                    <p
+                      className={`text-lg font-bold ${
+                        outlet.isOverGoal ? "text-red-600" : "text-[#5ad196]"
+                      }`}
+                    >
+                      {outlet.costPct}%
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Cost % (goal: {outlet.goalPct}%)
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-[#06113e]">
+                      {outlet.compliancePct}%
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">Compliance</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex gap-1.5">
+                    {outlet.isOverGoal && (
+                      <StatusBadge status="danger" label="Over Goal" />
+                    )}
+                    {outlet.compliancePct < 90 && (
+                      <StatusBadge status="warning" label="Low Compliance" />
+                    )}
+                    {!outlet.isOverGoal && outlet.compliancePct >= 90 && (
+                      <StatusBadge status="success" label="On Track" />
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">&rarr;</span>
                 </div>
               </CardContent>
             </Card>

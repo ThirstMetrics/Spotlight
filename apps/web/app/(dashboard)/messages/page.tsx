@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,133 +8,104 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { getMessageOverview, getMessages } from "@/lib/queries/messages";
 
-const sampleMessages = [
-  {
-    from: "Director - F&B",
-    to: "Carversteak",
-    subject: "Wine list update for March event",
-    preview: "Please review the updated wine selections for the upcoming...",
-    time: "2 hours ago",
-    unread: true,
-  },
-  {
-    from: "Pool Bar & Grill",
-    to: "Director - F&B",
-    subject: "Corona stock running low",
-    preview: "We are down to 3 cases of Corona Extra and need a reorder...",
-    time: "5 hours ago",
-    unread: true,
-  },
-  {
-    from: "Director - F&B",
-    to: "All Outlets",
-    subject: "New mandate items effective March 1",
-    preview: "Please note the following new mandate items have been added...",
-    time: "1 day ago",
-    unread: false,
-  },
-  {
-    from: "Bar Zazu",
-    to: "Director - F&B",
-    subject: "Cocktail menu rotation proposal",
-    preview: "Attached is our proposed spring cocktail menu with cost...",
-    time: "2 days ago",
-    unread: false,
-  },
-];
+export default async function MessagesPage() {
+  const [overview, messages] = await Promise.all([
+    getMessageOverview(),
+    getMessages(),
+  ]);
 
-export default function MessagesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Flash Messages</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Messages
+        </h1>
         <p className="text-muted-foreground">
-          Direct communication between directors and outlet managers.
+          Flash messages between directors and outlet managers.
         </p>
       </div>
 
+      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Unread</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">2</div>
-            <p className="text-xs text-muted-foreground">
-              Messages requiring attention
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Sent This Week
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">7</div>
-            <p className="text-xs text-muted-foreground">
-              From all directors
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Active Threads
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">4</div>
-            <p className="text-xs text-muted-foreground">
-              Open conversations
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Total Messages"
+          value={overview.total}
+          subtitle="All time"
+        />
+        <MetricCard
+          label="Unread"
+          value={overview.unread}
+          trend={overview.unread > 0 ? "up" : undefined}
+          trendValue="pending review"
+        />
+        <MetricCard
+          label="Sent This Week"
+          value={overview.sentThisWeek}
+          subtitle="Last 7 days"
+        />
       </div>
 
+      {/* Message List */}
       <Card>
         <CardHeader>
-          <CardTitle>Message Inbox</CardTitle>
+          <CardTitle className="text-lg">Recent Messages</CardTitle>
           <CardDescription>
-            Recent flash messages between directors and outlet managers
+            {messages.length > 0
+              ? `${messages.length} messages — ${overview.unread} unread`
+              : "No messages yet"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {sampleMessages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex items-start justify-between rounded-lg border p-4 ${
-                  message.unread ? "bg-accent/30" : ""
-                }`}
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{message.subject}</p>
-                    {message.unread && (
-                      <Badge variant="default">New</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {message.from} &rarr; {message.to}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {message.preview}
-                  </p>
-                </div>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {message.time}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex items-center justify-center rounded-md border border-dashed p-4">
-            <p className="text-sm text-muted-foreground">
-              Supabase Realtime messaging interface will render here
+          {messages.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No messages yet. Directors and room managers can send flash
+              messages through this system.
             </p>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex items-start gap-3 rounded-lg border p-4 ${
+                    !msg.isRead ? "bg-blue-50/30 border-blue-200" : ""
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {!msg.isRead && (
+                        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                      )}
+                      <span className="text-sm font-medium text-[#06113e]">
+                        {msg.subject}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {msg.body}
+                    </p>
+                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                      <span>From: {msg.sender.name}</span>
+                      {msg.outlet && (
+                        <Badge variant="secondary" className="text-xs">
+                          {msg.outlet.name}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {new Date(msg.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -6,126 +8,185 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { getDistributors, getPartnerOverview } from "@/lib/queries/partners";
 
-const distributors = [
-  {
-    name: "Southern Glazer's Wine & Spirits",
-    products: 124,
-    volume: "$487,200",
-    yoy: "+12.3%",
-  },
-  {
-    name: "Republic National Distributing",
-    products: 89,
-    volume: "$312,500",
-    yoy: "+8.7%",
-  },
-  {
-    name: "Breakthru Beverage Group",
-    products: 67,
-    volume: "$198,400",
-    yoy: "-2.1%",
-  },
-  {
-    name: "Young's Market Company",
-    products: 43,
-    volume: "$142,800",
-    yoy: "+15.4%",
-  },
-];
+export default async function DistributorsPage() {
+  const [distributors, overview] = await Promise.all([
+    getDistributors(),
+    getPartnerOverview(),
+  ]);
 
-export default function DistributorsPage() {
+  const formatCurrency = (n: number) =>
+    n >= 1_000_000
+      ? `$${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1_000
+        ? `$${(n / 1_000).toFixed(0)}K`
+        : `$${n.toFixed(0)}`;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Distributors</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Distributors
+        </h1>
         <p className="text-muted-foreground">
           View distributor performance, volume, and year-over-year trends.
         </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Distributors
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">4</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Volume</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$1,140,900</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Products
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">323</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">YoY Growth</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+9.1%</div>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Total Distributors"
+          value={overview.distributorCount}
+          subtitle="Active partners"
+        />
+        <MetricCard
+          label="Total Volume"
+          value={formatCurrency(overview.totalVolume)}
+          subtitle="Last 90 days"
+        />
+        <MetricCard
+          label="Total Products"
+          value={overview.totalProducts}
+          subtitle="Across all distributors"
+        />
+        <MetricCard
+          label="YoY Growth"
+          value={`${overview.yoyGrowth >= 0 ? "+" : ""}${overview.yoyGrowth}%`}
+          trend={overview.yoyGrowth >= 0 ? "up" : "down"}
+          trendValue="vs prior period"
+        />
       </div>
 
+      {/* Distributor Cards */}
       <div className="grid gap-4 md:grid-cols-2">
         {distributors.map((distributor) => (
-          <Card key={distributor.name}>
+          <Card key={distributor.id}>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{distributor.name}</CardTitle>
+                <CardTitle className="text-lg text-[#06113e]">
+                  {distributor.name}
+                </CardTitle>
                 <Badge
                   variant={
-                    distributor.yoy.startsWith("+") ? "success" : "destructive"
+                    distributor.yoyChange >= 0 ? "success" : "destructive"
                   }
                 >
-                  {distributor.yoy}
+                  {distributor.yoyChange >= 0 ? "+" : ""}
+                  {distributor.yoyChange}%
                 </Badge>
               </div>
               <CardDescription>
-                {distributor.products} products in catalog
+                {distributor.productCount} products in catalog
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total Volume</span>
-                <span className="font-medium">{distributor.volume}</span>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Volume (90d)</span>
+                  <span className="font-medium">
+                    {formatCurrency(distributor.volume)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Outlets Served</span>
+                  <span className="font-medium">{distributor.outletCount}</span>
+                </div>
+                {distributor.contactName && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Contact</span>
+                    <span className="text-muted-foreground text-xs">
+                      {distributor.contactName}
+                    </span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Volume Trends by Distributor</CardTitle>
-          <CardDescription>
-            Monthly purchase volume comparison across distributors
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex h-64 items-center justify-center rounded-md border border-dashed">
-            <p className="text-sm text-muted-foreground">
-              Recharts stacked bar chart will render here
+      {/* Distributor Table */}
+      {distributors.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Distributor Summary</CardTitle>
+            <CardDescription>
+              Volume, product count, and growth across all distributors
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50/50">
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      Distributor
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Products
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Outlets
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      Volume (90d)
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      YoY Change
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {distributors.map((dist) => (
+                    <tr
+                      key={dist.id}
+                      className="border-b hover:bg-gray-50/30"
+                    >
+                      <td className="px-4 py-3 font-medium text-[#06113e]">
+                        {dist.name}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {dist.productCount}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {dist.outletCount}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {formatCurrency(dist.volume)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span
+                          className={
+                            dist.yoyChange >= 0
+                              ? "text-[#5ad196] font-medium"
+                              : "text-red-600 font-medium"
+                          }
+                        >
+                          {dist.yoyChange >= 0 ? "+" : ""}
+                          {dist.yoyChange}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {distributors.length === 0 && (
+        <Card>
+          <CardContent className="py-12">
+            <p className="text-sm text-muted-foreground text-center">
+              No distributor data available. Upload order data to see
+              distributor metrics.
             </p>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

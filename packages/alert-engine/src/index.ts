@@ -6,7 +6,7 @@
  * and cost goal enforcement across all outlets in an organization.
  */
 
-export { AlertProcessor } from './alert-processor';
-export type { AlertResult, AlertType, AlertSeverity } from './alert-processor';
+export { AlertProcessor } from "./alert-processor";
+export type { AlertResult } from "./alert-processor";
 
-export { AlertNotifier } from './alert-notifier';
+export { AlertNotifier } from "./alert-notifier";

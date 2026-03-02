@@ -1,40 +1,17 @@
-/**
- * Types of alerts the system can generate.
- * Each maps to a specific business rule defined in the alert engine.
- */
-export type AlertType =
-  | 'mandate_compliance'
-  | 'pull_through_high'
-  | 'pull_through_low'
-  | 'days_of_inventory'
-  | 'new_direct_item'
-  | 'price_discrepancy'
-  | 'price_change'
-  | 'cost_goal_exceeded';
-
-/**
- * Alert severity levels. Determines notification urgency and UI treatment.
- */
-export type AlertSeverity = 'critical' | 'warning' | 'info';
+import { prisma, AlertType, AlertSeverity } from "@spotlight/db";
 
 /**
  * The result of an alert check. Contains all information needed to
  * create an alert record and notify the appropriate users.
  */
 export interface AlertResult {
-  /** The type of alert triggered */
   type: AlertType;
-  /** How severe/urgent the alert is */
   severity: AlertSeverity;
-  /** The outlet this alert relates to (if applicable) */
   outletId?: string;
-  /** The product this alert relates to (if applicable) */
   productId?: string;
-  /** Short title for the alert (shown in notification list) */
+  distributorId?: string;
   title: string;
-  /** Detailed message explaining the alert condition */
   message: string;
-  /** Additional structured data for the alert (thresholds, values, etc.) */
   metadata?: Record<string, unknown>;
 }
 
@@ -43,307 +20,651 @@ export interface AlertResult {
  * organization or per outlet in the admin settings.
  */
 const DEFAULT_THRESHOLDS = {
-  /** Percentage above rolling average to trigger high pull-through alert */
   pullThroughHighPercent: 120,
-  /** Percentage below rolling average to trigger low pull-through alert */
   pullThroughLowPercent: 80,
-  /** Default minimum days of inventory before alerting */
   daysOfInventoryMin: 5,
-  /** Days after mandate creation to expect first order */
   mandateComplianceDays: 7,
-  /** Rolling average window in days */
   rollingAverageDays: 90,
 };
 
 /**
  * AlertProcessor evaluates alert rules against current data and returns
- * alert results for conditions that are triggered. Each check method
- * corresponds to a specific alert rule defined in the business requirements.
+ * alert results for conditions that are triggered.
  */
 export class AlertProcessor {
   /**
    * Check mandate compliance for an outlet.
    * Verifies that all mandated items have been ordered within the required timeframe.
-   *
-   * TODO: Implement mandate compliance check:
-   * 1. Fetch mandate_items for the given mandateId
-   * 2. For each mandate item, check mandate_compliance and order_history
-   *    to see if the outlet has ordered it
-   * 3. For items not yet ordered, check if the mandate was created more
-   *    than 7 days ago (configurable)
-   * 4. Generate an alert for each non-compliant item
-   * 5. Alert severity: 'warning' if within grace period, 'critical' if overdue
-   *
-   * @param outletId - The outlet to check compliance for
-   * @param mandateId - The mandate to check against
-   * @returns Array of alert results, one per non-compliant item
    */
   async checkMandateCompliance(
     outletId: string,
     mandateId: string
   ): Promise<AlertResult[]> {
-    // TODO: Fetch mandate with its items from database
-    // TODO: Fetch order_history for this outlet to check which items have been ordered
-    // TODO: Compare mandate items vs ordered items
-    // TODO: Check mandate creation date vs. grace period (default 7 days)
-    // TODO: Generate alerts for non-compliant items
-    // TODO: Include mandate name, item name, and days overdue in metadata
-    console.log(
-      `[AlertProcessor] Checking mandate compliance for outlet ${outletId}, mandate ${mandateId}`
-    );
-    return [];
+    const alerts: AlertResult[] = [];
+
+    const mandate = await prisma.mandate.findUnique({
+      where: { id: mandateId },
+      include: {
+        mandateItems: {
+          include: {
+            product: { select: { id: true, name: true, sku: true } },
+            mandateCompliance: {
+              where: { outletId },
+            },
+          },
+        },
+      },
+    });
+
+    if (!mandate || !mandate.isActive) return alerts;
+
+    const gracePeriodMs = DEFAULT_THRESHOLDS.mandateComplianceDays * 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const mandateAge = now.getTime() - mandate.startDate.getTime();
+    const isOverdue = mandateAge > gracePeriodMs;
+
+    for (const item of mandate.mandateItems) {
+      const compliance = item.mandateCompliance[0];
+
+      // If compliant, skip
+      if (compliance?.isCompliant) continue;
+
+      // Check if ordered via direct orders or warehouse transfers
+      const [directOrder, warehouseTransfer] = await Promise.all([
+        prisma.directOrder.findFirst({
+          where: { outletId, productId: item.productId },
+          orderBy: { orderDate: "desc" },
+          select: { orderDate: true, quantity: true },
+        }),
+        prisma.warehouseTransfer.findFirst({
+          where: { outletId, productId: item.productId },
+          orderBy: { transferDate: "desc" },
+          select: { transferDate: true, quantity: true },
+        }),
+      ]);
+
+      const hasBeenOrdered = directOrder || warehouseTransfer;
+      if (hasBeenOrdered) continue;
+
+      const daysOverdue = Math.floor(mandateAge / (24 * 60 * 60 * 1000));
+
+      alerts.push({
+        type: AlertType.MANDATE_COMPLIANCE,
+        severity: isOverdue ? AlertSeverity.CRITICAL : AlertSeverity.WARNING,
+        outletId,
+        productId: item.productId,
+        title: `Mandate item not ordered: ${item.product.name}`,
+        message: `${item.product.name} (${item.product.sku}) from mandate "${mandate.name}" has not been ordered. ${daysOverdue} days since mandate start.`,
+        metadata: {
+          mandateId: mandate.id,
+          mandateName: mandate.name,
+          productName: item.product.name,
+          productSku: item.product.sku,
+          daysOverdue,
+          mandateStartDate: mandate.startDate.toISOString(),
+        },
+      });
+    }
+
+    return alerts;
   }
 
   /**
    * Check if pull-through for a product at an outlet is above historic average.
-   *
-   * TODO: Implement high pull-through detection:
-   * 1. Calculate rolling 90-day average pull-through for this product/outlet
-   * 2. Get the current period pull-through (configurable: weekly, monthly)
-   * 3. If current > average * (threshold / 100), generate alert
-   * 4. Optionally compare against same-period-last-year
-   * 5. Include both current and average values in metadata
-   *
-   * @param outletId - The outlet to check
-   * @param productId - The product to check
-   * @param threshold - Percentage above average to trigger (default: 120%)
-   * @returns Alert result if threshold exceeded, null otherwise
    */
   async checkPullThroughHigh(
     outletId: string,
     productId: string,
     threshold: number = DEFAULT_THRESHOLDS.pullThroughHighPercent
   ): Promise<AlertResult | null> {
-    // TODO: Query warehouse_transfers for this product/outlet over last 90 days
-    // TODO: Calculate rolling average daily/weekly pull-through
-    // TODO: Get current period pull-through
-    // TODO: Compare current vs. average * (threshold / 100)
-    // TODO: If exceeded, return AlertResult with type 'pull_through_high'
-    // TODO: Include current value, average, threshold, and % over in metadata
-    console.log(
-      `[AlertProcessor] Checking high pull-through for outlet ${outletId}, product ${productId}, threshold ${threshold}%`
-    );
-    return null;
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - DEFAULT_THRESHOLDS.rollingAverageDays * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Get 90-day total transfers for rolling average
+    const historicAgg = await prisma.warehouseTransfer.aggregate({
+      _sum: { quantity: true },
+      where: {
+        outletId,
+        productId,
+        transferDate: { gte: ninetyDaysAgo },
+      },
+    });
+
+    // Get last 30 days as "current period"
+    const currentAgg = await prisma.warehouseTransfer.aggregate({
+      _sum: { quantity: true },
+      where: {
+        outletId,
+        productId,
+        transferDate: { gte: thirtyDaysAgo },
+      },
+    });
+
+    const historicTotal = historicAgg._sum.quantity ?? 0;
+    const currentTotal = currentAgg._sum.quantity ?? 0;
+
+    if (historicTotal === 0) return null;
+
+    // Normalize to 30-day equivalent
+    const avgMonthly = historicTotal / 3;
+    const percentOfAvg = avgMonthly > 0 ? Math.round((currentTotal / avgMonthly) * 100) : 0;
+
+    if (percentOfAvg <= threshold) return null;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, sku: true },
+    });
+
+    return {
+      type: AlertType.PULL_THROUGH_HIGH,
+      severity: AlertSeverity.WARNING,
+      outletId,
+      productId,
+      title: `High pull-through: ${product?.name ?? "Unknown"}`,
+      message: `Pull-through for ${product?.name ?? productId} is at ${percentOfAvg}% of the 90-day average (threshold: ${threshold}%).`,
+      metadata: {
+        currentMonthly: currentTotal,
+        avgMonthly: Math.round(avgMonthly),
+        percentOfAvg,
+        threshold,
+      },
+    };
   }
 
   /**
    * Check if pull-through for a product at an outlet is below historic average.
-   *
-   * TODO: Implement low pull-through detection:
-   * 1. Calculate rolling 90-day average pull-through for this product/outlet
-   * 2. Get the current period pull-through
-   * 3. If current < average * (threshold / 100), generate alert
-   * 4. Exclude items with zero pull-through (may indicate removal from menu)
-   * 5. Include both current and average values in metadata
-   *
-   * @param outletId - The outlet to check
-   * @param productId - The product to check
-   * @param threshold - Percentage below average to trigger (default: 80%)
-   * @returns Alert result if threshold breached, null otherwise
    */
   async checkPullThroughLow(
     outletId: string,
     productId: string,
     threshold: number = DEFAULT_THRESHOLDS.pullThroughLowPercent
   ): Promise<AlertResult | null> {
-    // TODO: Query warehouse_transfers for this product/outlet over last 90 days
-    // TODO: Calculate rolling average daily/weekly pull-through
-    // TODO: Get current period pull-through
-    // TODO: Skip if current period is zero (product may have been removed)
-    // TODO: Compare current vs. average * (threshold / 100)
-    // TODO: If below, return AlertResult with type 'pull_through_low'
-    // TODO: Include current value, average, threshold, and % under in metadata
-    console.log(
-      `[AlertProcessor] Checking low pull-through for outlet ${outletId}, product ${productId}, threshold ${threshold}%`
-    );
-    return null;
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - DEFAULT_THRESHOLDS.rollingAverageDays * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const historicAgg = await prisma.warehouseTransfer.aggregate({
+      _sum: { quantity: true },
+      where: {
+        outletId,
+        productId,
+        transferDate: { gte: ninetyDaysAgo },
+      },
+    });
+
+    const currentAgg = await prisma.warehouseTransfer.aggregate({
+      _sum: { quantity: true },
+      where: {
+        outletId,
+        productId,
+        transferDate: { gte: thirtyDaysAgo },
+      },
+    });
+
+    const historicTotal = historicAgg._sum.quantity ?? 0;
+    const currentTotal = currentAgg._sum.quantity ?? 0;
+
+    if (historicTotal === 0) return null;
+    // Skip zero current period — product may have been removed from menu
+    if (currentTotal === 0) return null;
+
+    const avgMonthly = historicTotal / 3;
+    const percentOfAvg = avgMonthly > 0 ? Math.round((currentTotal / avgMonthly) * 100) : 0;
+
+    if (percentOfAvg >= threshold) return null;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, sku: true },
+    });
+
+    return {
+      type: AlertType.PULL_THROUGH_LOW,
+      severity: AlertSeverity.WARNING,
+      outletId,
+      productId,
+      title: `Low pull-through: ${product?.name ?? "Unknown"}`,
+      message: `Pull-through for ${product?.name ?? productId} is at ${percentOfAvg}% of the 90-day average (threshold: ${threshold}%).`,
+      metadata: {
+        currentMonthly: currentTotal,
+        avgMonthly: Math.round(avgMonthly),
+        percentOfAvg,
+        threshold,
+      },
+    };
   }
 
   /**
    * Check if days of inventory for a product at an outlet is below threshold.
-   *
-   * TODO: Implement days-of-inventory check:
-   * 1. Get current inventory level from inventory_snapshots
-   * 2. Calculate average daily usage from warehouse_transfers (90-day rolling)
-   * 3. Days of inventory = current level / average daily usage
-   * 4. If below threshold, generate alert
-   * 5. Handle edge cases: zero usage (infinite days), zero inventory
-   *
-   * @param outletId - The outlet to check
-   * @param productId - The product to check
-   * @param threshold - Minimum days of inventory before alerting (default: 5)
-   * @returns Alert result if below threshold, null otherwise
    */
   async checkDaysOfInventory(
     outletId: string,
     productId: string,
     threshold: number = DEFAULT_THRESHOLDS.daysOfInventoryMin
   ): Promise<AlertResult | null> {
-    // TODO: Fetch latest inventory_snapshot for this outlet/product
-    // TODO: Calculate average daily usage from warehouse_transfers (90-day window)
-    // TODO: Compute days of inventory = current qty / avg daily usage
-    // TODO: If days < threshold, return AlertResult with type 'days_of_inventory'
-    // TODO: Handle zero usage (don't alert if product is inactive)
-    // TODO: Include current qty, avg daily usage, and days remaining in metadata
-    console.log(
-      `[AlertProcessor] Checking days of inventory for outlet ${outletId}, product ${productId}, threshold ${threshold} days`
-    );
-    return null;
+    // Get latest inventory snapshot
+    const snapshot = await prisma.inventorySnapshot.findFirst({
+      where: { outletId, productId },
+      orderBy: { snapshotDate: "desc" },
+      select: { quantityOnHand: true, snapshotDate: true },
+    });
+
+    if (!snapshot || snapshot.quantityOnHand <= 0) return null;
+
+    // Calculate average daily usage from transfers over last 90 days
+    const ninetyDaysAgo = new Date(Date.now() - DEFAULT_THRESHOLDS.rollingAverageDays * 24 * 60 * 60 * 1000);
+    const transferAgg = await prisma.warehouseTransfer.aggregate({
+      _sum: { quantity: true },
+      where: {
+        outletId,
+        productId,
+        transferDate: { gte: ninetyDaysAgo },
+      },
+    });
+
+    const totalUsage = transferAgg._sum.quantity ?? 0;
+    if (totalUsage === 0) return null; // No usage = product inactive, don't alert
+
+    const avgDailyUsage = totalUsage / DEFAULT_THRESHOLDS.rollingAverageDays;
+    const daysRemaining = Math.round(snapshot.quantityOnHand / avgDailyUsage);
+
+    if (daysRemaining >= threshold) return null;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, sku: true },
+    });
+
+    return {
+      type: AlertType.DAYS_OF_INVENTORY,
+      severity: daysRemaining <= 2 ? AlertSeverity.CRITICAL : AlertSeverity.WARNING,
+      outletId,
+      productId,
+      title: `Low inventory: ${product?.name ?? "Unknown"} (${daysRemaining} days)`,
+      message: `${product?.name ?? productId} has approximately ${daysRemaining} days of inventory remaining (threshold: ${threshold} days). Current qty: ${snapshot.quantityOnHand}, avg daily usage: ${avgDailyUsage.toFixed(1)}.`,
+      metadata: {
+        currentQty: snapshot.quantityOnHand,
+        avgDailyUsage: Number(avgDailyUsage.toFixed(2)),
+        daysRemaining,
+        threshold,
+      },
+    };
   }
 
   /**
    * Check if a product is new to a specific outlet (first-time direct order).
-   *
-   * TODO: Implement new direct item detection:
-   * 1. Check direct_orders history for this product/outlet combination
-   * 2. If no prior orders exist, this is a new item for this outlet
-   * 3. Generate informational alert for the director
-   * 4. Include product details and outlet name in the alert
-   *
-   * @param outletId - The outlet that received the item
-   * @param productId - The product to check
-   * @returns Alert result if this is a new item, null otherwise
    */
   async checkNewDirectItem(
     outletId: string,
     productId: string
   ): Promise<AlertResult | null> {
-    // TODO: Query direct_orders and warehouse_transfers for prior occurrences
-    // TODO: If no prior orders exist, this is new
-    // TODO: Return AlertResult with type 'new_direct_item', severity 'info'
-    // TODO: Include product name, category, and distributor in metadata
-    // TODO: Include first order date and quantity
-    console.log(
-      `[AlertProcessor] Checking for new direct item: outlet ${outletId}, product ${productId}`
-    );
-    return null;
+    // Check if the product has any prior orders at this outlet
+    const [priorDirect, priorTransfer] = await Promise.all([
+      prisma.directOrder.findFirst({
+        where: { outletId, productId },
+        orderBy: { orderDate: "asc" },
+        select: { id: true, orderDate: true, quantity: true },
+      }),
+      prisma.warehouseTransfer.findFirst({
+        where: { outletId, productId },
+        select: { id: true },
+      }),
+    ]);
+
+    // If there's a prior warehouse transfer, product isn't new to outlet
+    if (priorTransfer) return null;
+
+    // Count direct orders — if more than 1, this isn't the first time
+    const directCount = await prisma.directOrder.count({
+      where: { outletId, productId },
+    });
+    if (directCount !== 1) return null;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, sku: true, category: true },
+    });
+
+    const outlet = await prisma.outlet.findUnique({
+      where: { id: outletId },
+      select: { name: true },
+    });
+
+    return {
+      type: AlertType.NEW_DIRECT_ITEM,
+      severity: AlertSeverity.INFO,
+      outletId,
+      productId,
+      title: `New item at ${outlet?.name ?? "outlet"}: ${product?.name ?? "Unknown"}`,
+      message: `${product?.name ?? productId} (${product?.sku ?? ""}) was ordered for the first time at ${outlet?.name ?? outletId}.`,
+      metadata: {
+        productName: product?.name,
+        productSku: product?.sku,
+        productCategory: product?.category,
+        outletName: outlet?.name,
+        firstOrderDate: priorDirect?.orderDate?.toISOString(),
+        firstOrderQty: priorDirect?.quantity,
+      },
+    };
   }
 
   /**
    * Check if the same product is priced differently across outlets.
-   *
-   * TODO: Implement price discrepancy detection:
-   * 1. For the given product, fetch the latest order cost from each outlet
-   * 2. Compare prices across all provided outlets
-   * 3. If prices differ, generate alert with the price range
-   * 4. Include all outlet/price pairs in metadata for admin review
-   *
-   * @param productId - The product to check prices for
-   * @param outletIds - The outlets to compare across
-   * @returns Alert result if prices differ, null if consistent
    */
   async checkPriceDiscrepancy(
     productId: string,
     outletIds: string[]
   ): Promise<AlertResult | null> {
-    // TODO: Fetch latest order cost per outlet from order_history/direct_orders
-    // TODO: Compare all prices to find discrepancies
-    // TODO: If prices differ, return AlertResult with type 'price_discrepancy'
-    // TODO: Include min price, max price, affected outlets in metadata
-    // TODO: Calculate percentage variance between min and max
-    console.log(
-      `[AlertProcessor] Checking price discrepancy for product ${productId} across ${outletIds.length} outlets`
-    );
-    return null;
+    if (outletIds.length < 2) return null;
+
+    const pricesByOutlet: Array<{ outletId: string; outletName: string; cost: number }> = [];
+
+    for (const outletId of outletIds) {
+      const latestOrder = await prisma.orderHistory.findFirst({
+        where: { outletId, productId },
+        orderBy: { orderDate: "desc" },
+        select: { costPerUnit: true },
+      });
+
+      const latestDirect = await prisma.directOrder.findFirst({
+        where: { outletId, productId },
+        orderBy: { orderDate: "desc" },
+        select: { costPerUnit: true },
+      });
+
+      const cost = latestDirect?.costPerUnit ?? latestOrder?.costPerUnit;
+      if (cost == null) continue;
+
+      const outlet = await prisma.outlet.findUnique({
+        where: { id: outletId },
+        select: { name: true },
+      });
+
+      pricesByOutlet.push({
+        outletId,
+        outletName: outlet?.name ?? outletId,
+        cost,
+      });
+    }
+
+    if (pricesByOutlet.length < 2) return null;
+
+    const prices = pricesByOutlet.map((p) => p.cost);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+
+    if (minPrice === maxPrice) return null;
+
+    const variance = maxPrice > 0 ? Math.round(((maxPrice - minPrice) / minPrice) * 100) : 0;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, sku: true },
+    });
+
+    return {
+      type: AlertType.PRICE_DISCREPANCY,
+      severity: variance >= 10 ? AlertSeverity.WARNING : AlertSeverity.INFO,
+      productId,
+      title: `Price discrepancy: ${product?.name ?? "Unknown"} (${variance}% variance)`,
+      message: `${product?.name ?? productId} has different prices across outlets. Range: $${minPrice.toFixed(2)} — $${maxPrice.toFixed(2)} (${variance}% variance).`,
+      metadata: {
+        productName: product?.name,
+        minPrice,
+        maxPrice,
+        variance,
+        outlets: pricesByOutlet,
+      },
+    };
   }
 
   /**
    * Check if the price of a product changed from the previous order at an outlet.
-   *
-   * TODO: Implement price change detection:
-   * 1. Get the two most recent orders for this product/outlet
-   * 2. Compare the unit cost between them
-   * 3. If different, generate alert with the percentage change
-   * 4. Severity: 'info' for small changes (<5%), 'warning' for larger
-   *
-   * @param productId - The product to check
-   * @param outletId - The outlet to check at
-   * @returns Alert result if price changed, null if consistent
    */
   async checkPriceChange(
     productId: string,
     outletId: string
   ): Promise<AlertResult | null> {
-    // TODO: Fetch the two most recent orders for this product/outlet
-    // TODO: Compare unit_cost values
-    // TODO: Calculate percentage change
-    // TODO: Return AlertResult with type 'price_change' if changed
-    // TODO: Set severity based on change magnitude
-    // TODO: Include old price, new price, % change, order dates in metadata
-    console.log(
-      `[AlertProcessor] Checking price change for product ${productId} at outlet ${outletId}`
-    );
-    return null;
+    const recentOrders = await prisma.orderHistory.findMany({
+      where: { outletId, productId },
+      orderBy: { orderDate: "desc" },
+      take: 2,
+      select: { costPerUnit: true, orderDate: true },
+    });
+
+    if (recentOrders.length < 2) return null;
+
+    const [current, previous] = recentOrders;
+    if (current.costPerUnit === previous.costPerUnit) return null;
+
+    const change = current.costPerUnit - previous.costPerUnit;
+    const pctChange = previous.costPerUnit > 0
+      ? Math.round((change / previous.costPerUnit) * 100)
+      : 0;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { name: true, sku: true },
+    });
+
+    return {
+      type: AlertType.PRICE_CHANGE,
+      severity: Math.abs(pctChange) >= 5 ? AlertSeverity.WARNING : AlertSeverity.INFO,
+      outletId,
+      productId,
+      title: `Price ${change > 0 ? "increase" : "decrease"}: ${product?.name ?? "Unknown"} (${pctChange > 0 ? "+" : ""}${pctChange}%)`,
+      message: `${product?.name ?? productId} price changed from $${previous.costPerUnit.toFixed(2)} to $${current.costPerUnit.toFixed(2)} (${pctChange > 0 ? "+" : ""}${pctChange}%).`,
+      metadata: {
+        oldPrice: previous.costPerUnit,
+        newPrice: current.costPerUnit,
+        change: Number(change.toFixed(2)),
+        pctChange,
+        previousOrderDate: previous.orderDate.toISOString(),
+        currentOrderDate: current.orderDate.toISOString(),
+      },
+    };
   }
 
   /**
    * Check if an outlet's cost percentage exceeds its configured goal.
-   *
-   * TODO: Implement cost goal check:
-   * 1. Fetch the cost_goal for this outlet (optionally filtered by category)
-   * 2. Calculate actual cost percentage from sales_data and order costs
-   * 3. If actual > goal, generate alert
-   * 4. Support category-level checks (beer, wine, spirits, sake) and overall
-   *
-   * @param outletId - The outlet to check
-   * @param category - Optional category filter (beer, wine, spirits, sake)
-   * @returns Alert result if cost exceeds goal, null if within target
    */
   async checkCostGoal(
     outletId: string,
     category?: string
   ): Promise<AlertResult | null> {
-    // TODO: Fetch cost_goals for this outlet from database
-    // TODO: Aggregate costs from order_history for the current period
-    // TODO: Aggregate revenue from sales_data for the current period
-    // TODO: Calculate actual cost percentage = total_cost / total_revenue * 100
-    // TODO: Compare against goal
-    // TODO: Return AlertResult with type 'cost_goal_exceeded' if over
-    // TODO: Include actual %, goal %, variance, and period in metadata
-    console.log(
-      `[AlertProcessor] Checking cost goal for outlet ${outletId}, category: ${category || 'all'}`
-    );
-    return null;
+    const now = new Date();
+    const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+    const costGoal = await prisma.costGoal.findFirst({
+      where: {
+        outletId,
+        ...(category ? { category: category as never } : {}),
+      },
+      orderBy: { effectiveDate: "desc" },
+      select: { targetCostPercentage: true },
+    });
+
+    if (!costGoal) return null;
+
+    const [salesAgg, costAgg] = await Promise.all([
+      prisma.salesData.aggregate({
+        _sum: { revenue: true },
+        where: { outletId, saleDate: { gte: threeMonthsAgo } },
+      }),
+      prisma.orderHistory.aggregate({
+        _sum: { totalCost: true },
+        where: { outletId, orderDate: { gte: threeMonthsAgo } },
+      }),
+    ]);
+
+    const revenue = salesAgg._sum.revenue ?? 0;
+    const cost = costAgg._sum.totalCost ?? 0;
+
+    if (revenue === 0) return null;
+
+    const actualPct = Math.round((cost / revenue) * 100);
+
+    if (actualPct <= costGoal.targetCostPercentage) return null;
+
+    const outlet = await prisma.outlet.findUnique({
+      where: { id: outletId },
+      select: { name: true },
+    });
+
+    return {
+      type: AlertType.COST_GOAL_EXCEEDED,
+      severity: (actualPct - costGoal.targetCostPercentage) >= 5
+        ? AlertSeverity.CRITICAL
+        : AlertSeverity.WARNING,
+      outletId,
+      title: `Cost goal exceeded: ${outlet?.name ?? "Outlet"} (${actualPct}% vs ${costGoal.targetCostPercentage}% goal)`,
+      message: `${outlet?.name ?? outletId} has a cost percentage of ${actualPct}%, exceeding the goal of ${costGoal.targetCostPercentage}%.${category ? ` Category: ${category}.` : ""}`,
+      metadata: {
+        actualPct,
+        goalPct: costGoal.targetCostPercentage,
+        variance: actualPct - costGoal.targetCostPercentage,
+        category: category ?? "all",
+        revenue,
+        cost,
+        period: "90 days",
+      },
+    };
   }
 
   /**
    * Run all alert checks for an entire organization.
-   * This is the main entry point called after data ingestion or on a schedule.
-   *
-   * TODO: Implement full organization alert scan:
-   * 1. Fetch all outlets for the organization
-   * 2. Fetch all active mandates
-   * 3. Fetch all products with recent activity
-   * 4. Run each alert check type across all relevant outlet/product combinations
-   * 5. Deduplicate alerts (don't re-create alerts that already exist and are unread)
-   * 6. Batch create new alerts via AlertNotifier
-   * 7. Return all generated alerts
-   *
-   * Performance considerations:
-   * - Run checks in parallel where possible
-   * - Use bulk database queries instead of per-item queries
-   * - Cache frequently accessed data (rolling averages, cost goals)
-   * - Consider running on a background job queue for large organizations
-   *
-   * @param organizationId - The organization to process alerts for
-   * @returns All alert results generated during the scan
+   * Main entry point called after data ingestion or on a schedule.
    */
   async processAllAlerts(organizationId: string): Promise<AlertResult[]> {
-    // TODO: Fetch all outlets for the organization
-    // TODO: Fetch all active mandates and their items
-    // TODO: Fetch all products with recent order/transfer activity
-    // TODO: Run mandate compliance checks for each outlet/mandate
-    // TODO: Run pull-through checks (high and low) for each outlet/product
-    // TODO: Run days-of-inventory checks for each outlet/product
-    // TODO: Run price discrepancy checks across outlets
-    // TODO: Run price change checks for recent orders
-    // TODO: Run cost goal checks for each outlet
-    // TODO: Deduplicate against existing unread alerts
-    // TODO: Create new alerts via AlertNotifier
-    // TODO: Log processing summary (total checks, alerts generated, time elapsed)
+    const startTime = Date.now();
+    const allAlerts: AlertResult[] = [];
+
+    // Fetch all outlets for the organization
+    const outlets = await prisma.outlet.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true, name: true },
+    });
+
+    // Fetch all active mandates
+    const mandates = await prisma.mandate.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true },
+    });
+
+    // Fetch products with recent activity (last 90 days)
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+    const recentTransfers = await prisma.warehouseTransfer.findMany({
+      where: { organizationId, transferDate: { gte: ninetyDaysAgo } },
+      select: { outletId: true, productId: true },
+      distinct: ["outletId", "productId"],
+    });
+
+    const recentDirectOrders = await prisma.directOrder.findMany({
+      where: { organizationId, orderDate: { gte: ninetyDaysAgo } },
+      select: { outletId: true, productId: true },
+      distinct: ["outletId", "productId"],
+    });
+
+    // Build set of outlet+product pairs with recent activity
+    const activeOutletProducts = new Set<string>();
+    const allProductIds = new Set<string>();
+
+    for (const t of recentTransfers) {
+      activeOutletProducts.add(`${t.outletId}:${t.productId}`);
+      allProductIds.add(t.productId);
+    }
+    for (const d of recentDirectOrders) {
+      activeOutletProducts.add(`${d.outletId}:${d.productId}`);
+      allProductIds.add(d.productId);
+    }
+
+    // 1. Mandate compliance checks
+    for (const mandate of mandates) {
+      for (const outlet of outlets) {
+        const mandateAlerts = await this.checkMandateCompliance(outlet.id, mandate.id);
+        allAlerts.push(...mandateAlerts);
+      }
+    }
+
+    // 2. Pull-through checks (high and low) for active outlet/product pairs
+    for (const key of activeOutletProducts) {
+      const [outletId, productId] = key.split(":");
+
+      const high = await this.checkPullThroughHigh(outletId, productId);
+      if (high) allAlerts.push(high);
+
+      const low = await this.checkPullThroughLow(outletId, productId);
+      if (low) allAlerts.push(low);
+    }
+
+    // 3. Days of inventory checks
+    for (const key of activeOutletProducts) {
+      const [outletId, productId] = key.split(":");
+      const doi = await this.checkDaysOfInventory(outletId, productId);
+      if (doi) allAlerts.push(doi);
+    }
+
+    // 4. New direct item checks
+    for (const d of recentDirectOrders) {
+      const newItem = await this.checkNewDirectItem(d.outletId, d.productId);
+      if (newItem) allAlerts.push(newItem);
+    }
+
+    // 5. Price discrepancy checks across outlets per product
+    for (const productId of allProductIds) {
+      const outletsForProduct = outlets.map((o) => o.id);
+      const discrepancy = await this.checkPriceDiscrepancy(productId, outletsForProduct);
+      if (discrepancy) allAlerts.push(discrepancy);
+    }
+
+    // 6. Price change checks for recent orders
+    const recentOrderHistory = await prisma.orderHistory.findMany({
+      where: { organizationId, orderDate: { gte: ninetyDaysAgo } },
+      select: { outletId: true, productId: true },
+      distinct: ["outletId", "productId"],
+    });
+
+    for (const oh of recentOrderHistory) {
+      const priceChange = await this.checkPriceChange(oh.productId, oh.outletId);
+      if (priceChange) allAlerts.push(priceChange);
+    }
+
+    // 7. Cost goal checks for each outlet
+    for (const outlet of outlets) {
+      const costGoal = await this.checkCostGoal(outlet.id);
+      if (costGoal) allAlerts.push(costGoal);
+    }
+
+    // 8. Deduplicate against existing unread alerts
+    const dedupedAlerts: AlertResult[] = [];
+    for (const alert of allAlerts) {
+      const existing = await prisma.alert.findFirst({
+        where: {
+          organizationId,
+          alertType: alert.type,
+          outletId: alert.outletId ?? null,
+          productId: alert.productId ?? null,
+          isDismissed: false,
+          isRead: false,
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        dedupedAlerts.push(alert);
+      }
+    }
+
+    const elapsed = Date.now() - startTime;
     console.log(
-      `[AlertProcessor] Processing all alerts for organization ${organizationId}`
+      `[AlertProcessor] Processed ${outlets.length} outlets, ${allProductIds.size} products. ` +
+      `Generated ${dedupedAlerts.length} new alerts (${allAlerts.length} total, ${allAlerts.length - dedupedAlerts.length} deduped). ` +
+      `Took ${elapsed}ms.`
     );
-    return [];
+
+    return dedupedAlerts;
   }
 }
