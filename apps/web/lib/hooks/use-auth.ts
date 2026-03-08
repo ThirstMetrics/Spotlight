@@ -1,20 +1,8 @@
 "use client";
 
-// =============================================================================
-// useAuth — Zustand-based authentication state hook
-// =============================================================================
-
 import { create } from "zustand";
 import { UserRoleType } from "@spotlight/shared";
 
-// -----------------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------------
-
-/**
- * Client-side representation of the authenticated user.
- * Mirrors the server-side AuthUser but lives in the Zustand store.
- */
 export interface AuthUser {
   id: string;
   email: string;
@@ -27,35 +15,15 @@ export interface AuthUser {
 }
 
 interface AuthState {
-  /** The currently authenticated user, or null if not logged in. */
   user: AuthUser | null;
-  /** Whether an auth check or login attempt is in progress. */
   isLoading: boolean;
-  /** The most recent auth error message, if any. */
   error: string | null;
-  /**
-   * Attempt to log in with email and password.
-   * On success, sets `user` and persists the token.
-   */
   login: (email: string, password: string) => Promise<void>;
-  /** Log out the current user and clear persisted token. */
   logout: () => void;
-  /**
-   * Check if a persisted session token exists and is still valid.
-   * Typically called once on app mount.
-   */
   checkAuth: () => Promise<void>;
 }
 
-// -----------------------------------------------------------------------------
-// Constants
-// -----------------------------------------------------------------------------
-
 const TOKEN_KEY = "spotlight_auth_token";
-
-// -----------------------------------------------------------------------------
-// Store
-// -----------------------------------------------------------------------------
 
 export const useAuth = create<AuthState>((set) => ({
   user: null,
@@ -72,15 +40,14 @@ export const useAuth = create<AuthState>((set) => ({
         body: JSON.stringify({ email, password }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const body = await response.json();
-        throw new Error(body.error ?? "Login failed");
+        throw new Error(result.error ?? "Login failed");
       }
 
-      const { data } = await response.json();
-      const { token, user } = data as { token: string; user: AuthUser };
+      const { token, user } = result.data as { token: string; user: AuthUser };
 
-      // Persist the token for subsequent requests
       if (typeof window !== "undefined") {
         localStorage.setItem(TOKEN_KEY, token);
       }
@@ -92,11 +59,17 @@ export const useAuth = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Best-effort cookie clear
+    }
     if (typeof window !== "undefined") {
       localStorage.removeItem(TOKEN_KEY);
     }
     set({ user: null, isLoading: false, error: null });
+    window.location.href = "/login";
   },
 
   checkAuth: async () => {
@@ -111,9 +84,7 @@ export const useAuth = create<AuthState>((set) => ({
     set({ isLoading: true });
 
     try {
-      // Validate the existing token by calling a lightweight auth endpoint.
-      const response = await fetch("/api/auth/login", {
-        method: "GET",
+      const response = await fetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -124,21 +95,12 @@ export const useAuth = create<AuthState>((set) => ({
       const { data } = await response.json();
       set({ user: data.user as AuthUser, isLoading: false, error: null });
     } catch {
-      // Token is invalid — clear it.
       localStorage.removeItem(TOKEN_KEY);
       set({ user: null, isLoading: false, error: null });
     }
   },
 }));
 
-// -----------------------------------------------------------------------------
-// Utility — get token for use in fetch headers
-// -----------------------------------------------------------------------------
-
-/**
- * Retrieve the stored auth token for use in API requests.
- * Returns null if no token is stored.
- */
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);

@@ -79,6 +79,15 @@ enum OrderType {
   DIRECT
 }
 
+enum TrackingNumberType {
+  POS
+  COST_CENTER
+  PURCHASING_SYSTEM
+  GL_CODE
+  INVENTORY_SYSTEM
+  OTHER
+}
+
 // ============================================================================
 // ORGANIZATION & ACCESS
 // ============================================================================
@@ -159,6 +168,7 @@ model Outlet {
   alertRules         AlertRule[]
   alerts             Alert[]
   flashMessages      FlashMessage[]
+  trackingNumbers    OutletTrackingNumber[]
 
   @@unique([organizationId, slug])
   @@map("outlets")
@@ -177,15 +187,32 @@ model OutletGroup {
   @@map("outlet_groups")
 }
 
+model OutletTrackingNumber {
+  id        String             @id @default(cuid())
+  outletId  String             @map("outlet_id")
+  type      TrackingNumberType
+  value     String
+  notes     String?
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  outlet Outlet @relation(fields: [outletId], references: [id], onDelete: Cascade)
+
+  @@unique([outletId, type])
+  @@index([outletId])
+  @@map("outlet_tracking_numbers")
+}
+
 model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
-  name        String
-  avatarUrl   String?   @map("avatar_url")
-  isActive    Boolean   @default(true) @map("is_active")
-  lastLoginAt DateTime? @map("last_login_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String?   @map("password_hash")
+  avatarUrl    String?   @map("avatar_url")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   userRoles          UserRoleAssignment[]
   mandatesCreated    Mandate[]           @relation("MandateCreator")

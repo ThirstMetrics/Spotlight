@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: "Spotlight Partner Portal",
   description:
     "Distributor and supplier portal for Spotlight beverage management platform",
+  icons: {
+    icon: "/logos/spotlight-icon-navy.svg",
+  },
 };
 
 export default function RootLayout({
@@ -17,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
   );
 }

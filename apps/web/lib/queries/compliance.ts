@@ -7,15 +7,12 @@ import { prisma } from "@spotlight/db";
 
 /** Get compliance overview stats */
 export async function getComplianceOverview() {
-  const [totalItems, compliantItems, mandateCount, outletCompliance] = await Promise.all([
+  const [totalItems, compliantItems, mandateCount, outletsTracked, mandateItemCount] = await Promise.all([
     prisma.mandateCompliance.count(),
     prisma.mandateCompliance.count({ where: { isCompliant: true } }),
     prisma.mandate.count({ where: { isActive: true } }),
-    prisma.mandateCompliance.groupBy({
-      by: ["outletId"],
-      _count: { id: true, _all: true },
-      where: { isCompliant: true },
-    }),
+    prisma.outlet.count({ where: { isActive: true, mandateCompliance: { some: {} } } }),
+    prisma.mandateItem.count(),
   ]);
 
   const compliancePct = totalItems > 0 ? Math.round((compliantItems / totalItems) * 100) : 0;
@@ -27,6 +24,8 @@ export async function getComplianceOverview() {
     nonCompliantCount,
     compliancePct,
     activeMandates: mandateCount,
+    outletsTracked,
+    totalMandateItems: mandateItemCount,
   };
 }
 
@@ -59,6 +58,60 @@ export async function getComplianceMatrix() {
     isCompliant: c.isCompliant,
     lastOrderDate: c.lastOrderDate,
     lastOrderQuantity: c.lastOrderQuantity,
+  }));
+}
+
+/** Get compliance drill-down — mandate items with per-outlet compliance status */
+export async function getComplianceDrillDown() {
+  const mandates = await prisma.mandate.findMany({
+    where: { isActive: true },
+    include: {
+      mandateItems: {
+        include: {
+          product: { select: { id: true, name: true, sku: true, category: true } },
+          mandateCompliance: {
+            include: {
+              outlet: { select: { id: true, name: true, slug: true } },
+            },
+            orderBy: { outlet: { name: "asc" } },
+          },
+        },
+        orderBy: { product: { name: "asc" } },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return mandates.map((mandate) => ({
+    id: mandate.id,
+    name: mandate.name,
+    description: mandate.description,
+    items: mandate.mandateItems.map((mi) => {
+      const total = mi.mandateCompliance.length;
+      const compliant = mi.mandateCompliance.filter((c) => c.isCompliant).length;
+      const status: "full" | "partial" | "none" =
+        total === 0 ? "none" : compliant === total ? "full" : compliant > 0 ? "partial" : "none";
+      return {
+        id: mi.id,
+        productId: mi.product.id,
+        productName: mi.product.name,
+        productSku: mi.product.sku,
+        category: mi.product.category,
+        minimumQuantity: mi.minimumQuantity,
+        total,
+        compliant,
+        nonCompliant: total - compliant,
+        status,
+        outlets: mi.mandateCompliance.map((c) => ({
+          id: c.outlet.id,
+          name: c.outlet.name,
+          slug: c.outlet.slug,
+          isCompliant: c.isCompliant,
+          lastOrderDate: c.lastOrderDate,
+          lastOrderQuantity: c.lastOrderQuantity,
+        })),
+      };
+    }),
   }));
 }
 

@@ -29,10 +29,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 export function VolumeTrendChart({ data }: TrendChartProps) {
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+      <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="label" tick={{ fontSize: 12, fill: "#64748b" }} />
-        <YAxis tick={{ fontSize: 12, fill: "#64748b" }} />
+        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} interval={0} angle={-35} textAnchor="end" height={45} />
+        <YAxis tick={{ fontSize: 10, fill: "#64748b" }} width={40} />
         <Tooltip
           formatter={(value: number) => [value.toLocaleString(), "Units"]}
           contentStyle={{
@@ -54,19 +54,17 @@ interface CategoryPieProps {
 
 export function CategoryPieChart({ data }: CategoryPieProps) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <PieChart>
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
         <Pie
           data={data}
           cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={100}
+          cy="45%"
+          innerRadius={45}
+          outerRadius={75}
           paddingAngle={2}
           dataKey="value"
           nameKey="name"
-          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-          labelLine={{ stroke: "#94a3b8", strokeWidth: 1 }}
         >
           {data.map((entry) => (
             <Cell
@@ -82,6 +80,20 @@ export function CategoryPieChart({ data }: CategoryPieProps) {
             border: "1px solid #e2e8f0",
             borderRadius: "8px",
             fontSize: "13px",
+          }}
+        />
+        <Legend
+          layout="horizontal"
+          verticalAlign="bottom"
+          align="center"
+          wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+          iconSize={10}
+          iconType="circle"
+          formatter={(value, entry) => {
+            const item = data.find((d) => d.name === value);
+            const total = data.reduce((s, d) => s + d.value, 0);
+            const pct = item && total > 0 ? Math.round((item.value / total) * 100) : 0;
+            return <span style={{ color: "#374151", fontSize: "11px" }}>{value} {pct}%</span>;
           }}
         />
       </PieChart>

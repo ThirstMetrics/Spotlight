@@ -31,35 +31,42 @@ export default async function AdminPage() {
     {
       title: "Outlets",
       description: "Manage outlet configurations and groupings",
-      href: "#",
+      href: "/admin/outlets",
       count: overview.outletCount,
       countLabel: "active outlets",
     },
     {
       title: "Outlet Groups",
       description: "Segment outlets for reporting (fine dining, casual, etc.)",
-      href: "#",
+      href: "/admin/outlet-groups",
       count: overview.outletGroupCount,
       countLabel: "groups defined",
     },
     {
+      title: "Internal Accounts",
+      description: "POS IDs, cost centers, GL codes, and tracking numbers per outlet",
+      href: "/admin/internal-accounts",
+      count: overview.trackingNumberCount,
+      countLabel: "tracking numbers",
+    },
+    {
       title: "Cost Goals",
       description: "Set target cost percentages per outlet or category",
-      href: "#",
+      href: "/admin/cost-goals",
       count: overview.costGoalCount,
       countLabel: "goals configured",
     },
     {
       title: "Users & Roles",
       description: "Manage user accounts and role assignments",
-      href: "#",
+      href: "/admin/users",
       count: overview.userCount,
       countLabel: "active users",
     },
     {
       title: "Field Mappings",
       description: "Saved column mapping profiles for data imports",
-      href: "#",
+      href: "/admin/field-mappings",
       count: overview.fieldMappingCount,
       countLabel: "saved profiles",
     },
@@ -77,55 +84,29 @@ export default async function AdminPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {sections.map((section) => {
-          const Wrapper = section.href !== "#" ? Link : "div";
-          return (
-            <Card
-              key={section.title}
-              className={
-                section.href !== "#"
-                  ? "hover:border-[#5ad196] transition-colors cursor-pointer"
-                  : ""
-              }
-            >
-              {section.href !== "#" ? (
-                <Link href={section.href} className="block">
-                  <CardHeader>
-                    <CardTitle className="text-lg text-[#06113e]">
-                      {section.title}
-                    </CardTitle>
-                    <CardDescription>{section.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-[#06113e]">
-                      {section.count}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {section.countLabel}
-                    </p>
-                  </CardContent>
-                </Link>
-              ) : (
-                <>
-                  <CardHeader>
-                    <CardTitle className="text-lg text-[#06113e]">
-                      {section.title}
-                    </CardTitle>
-                    <CardDescription>{section.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-[#06113e]">
-                      {section.count}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {section.countLabel}
-                    </p>
-                  </CardContent>
-                </>
-              )}
-            </Card>
-          );
-        })}
+        {sections.map((section) => (
+          <Card
+            key={section.title}
+            className="hover:border-[#5ad196] transition-colors cursor-pointer"
+          >
+            <Link href={section.href} className="block">
+              <CardHeader>
+                <CardTitle className="text-lg text-[#06113e]">
+                  {section.title}
+                </CardTitle>
+                <CardDescription>{section.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-[#06113e]">
+                  {section.count}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {section.countLabel}
+                </p>
+              </CardContent>
+            </Link>
+          </Card>
+        ))}
       </div>
     </div>
   );

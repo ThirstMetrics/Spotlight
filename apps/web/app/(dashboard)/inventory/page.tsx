@@ -14,6 +14,8 @@ import {
   getInventoryItems,
   getInventoryAlerts,
 } from "@/lib/queries/inventory";
+import { InventoryTable } from "./InventoryTable";
+import { ExportButton } from "@/components/dashboard/ExportButton";
 
 export default async function InventoryPage() {
   const [overview, items, alerts] = await Promise.all([
@@ -31,13 +33,16 @@ export default async function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
-          Inventory
-        </h1>
-        <p className="text-muted-foreground">
-          Alerts, pull-through analysis, and days-on-hand tracking.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+            Inventory
+          </h1>
+          <p className="text-muted-foreground">
+            Alerts, pull-through analysis, and days-on-hand tracking.
+          </p>
+        </div>
+        <ExportButton reportType="inventory" />
       </div>
 
       {/* Metric Cards */}
@@ -137,76 +142,7 @@ export default async function InventoryPage() {
               track inventory levels.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50/50">
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Outlet
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Product
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-600">
-                      Qty On Hand
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-600">
-                      Avg Daily Usage
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-600">
-                      Days On Hand
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.slice(0, 50).map((item, i) => (
-                    <tr
-                      key={`${item.outletId}-${item.productId}`}
-                      className="border-b hover:bg-gray-50/30"
-                    >
-                      <td className="px-4 py-3 font-medium text-[#06113e]">
-                        {item.outletName}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <span className="font-medium">{item.productName}</span>
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({item.productSku})
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="secondary" className="text-xs">
-                          {item.category}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {item.quantityOnHand.toFixed(0)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">
-                        {item.avgDailyUsage.toFixed(1)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span
-                          className={
-                            item.daysOnHand <= 2
-                              ? "text-red-600 font-bold"
-                              : item.daysOnHand <= 5
-                                ? "text-amber-600 font-medium"
-                                : "text-[#5ad196] font-medium"
-                          }
-                        >
-                          {item.daysOnHand >= 999 ? "∞" : `${item.daysOnHand}d`}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <InventoryTable data={items} />
           )}
         </CardContent>
       </Card>

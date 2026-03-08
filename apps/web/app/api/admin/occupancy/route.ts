@@ -5,23 +5,64 @@
 import { NextResponse } from "next/server";
 import { UserRoleType } from "@spotlight/shared";
 import type { ApiResponse, PaginatedResponse, HotelOccupancy } from "@spotlight/shared";
+import { prisma } from "@spotlight/db";
 import { getAuthUser } from "@/lib/auth";
-import { checkPermission, filterByScope } from "@/lib/rbac";
+import { checkPermission } from "@/lib/rbac";
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+/**
+ * Map a Prisma HotelOccupancy row to the shared HotelOccupancy type.
+ *
+ * The Prisma model lacks `updatedAt`, so we fall back to `createdAt`.
+ * `restaurantCovers` is nullable in the DB but required in the shared type,
+ * so we default to 0.
+ */
+function toHotelOccupancy(row: {
+  id: string;
+  organizationId: string;
+  date: Date;
+  hotelGuests: number;
+  restaurantCovers: number | null;
+  notes: string | null;
+  createdAt: Date;
+}): HotelOccupancy {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    date: row.date,
+    hotelGuests: row.hotelGuests,
+    restaurantCovers: row.restaurantCovers ?? 0,
+    notes: row.notes ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.createdAt,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// GET /api/admin/occupancy
+// -----------------------------------------------------------------------------
 
 /**
  * GET /api/admin/occupancy
  *
- * Retrieve hotel occupancy data (guest counts, restaurant covers) with date range filtering.
+ * Retrieve hotel occupancy data (guest counts, restaurant covers) with date
+ * range filtering and pagination.
  *
- * Full implementation will:
- * - Query hotel_occupancy table for the user's organization
- * - Support query params: from, to (date range), organizationId (VP/Director only)
- * - VP/Director: access across all organizations
- * - Admin: their organization only
- * - Room Manager: their organization (read-only)
- * - Distributors/Suppliers: no access
- * - Support pagination and sorting by date
- * - Used by dashboards for per-guest/per-cover revenue and cost calculations
+ * Query parameters:
+ *   - from           — Start of date range (ISO string, inclusive)
+ *   - to             — End of date range (ISO string, inclusive)
+ *   - organizationId — Filter by organization (VP/Director only)
+ *   - page           — Page number (default: 1)
+ *   - pageSize       — Results per page (default: 20, max: 100)
+ *
+ * RBAC scoping:
+ *   - VP/Director:   All organizations (optionally filtered by organizationId)
+ *   - Admin:         Own organization only
+ *   - Room Manager:  Own organization only (read-only)
+ *   - Distributor/Supplier: No access (blocked by checkPermission)
  */
 export async function GET(request: Request): Promise<NextResponse<ApiResponse<PaginatedResponse<HotelOccupancy>>>> {
   const user = await getAuthUser(request);
@@ -39,81 +80,94 @@ export async function GET(request: Request): Promise<NextResponse<ApiResponse<Pa
     );
   }
 
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
+  try {
+    const { searchParams } = new URL(request.url);
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+    const orgIdParam = searchParams.get("organizationId");
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") ?? "20", 10) || 20));
 
-  // TODO: Replace with real database query.
-  const placeholderOccupancy: HotelOccupancy[] = [
-    {
-      id: "occ_001",
-      organizationId: "org_placeholder_001",
-      date: new Date("2026-02-28T00:00:00Z"),
-      hotelGuests: 2450,
-      restaurantCovers: 1820,
-      notes: "Weekend peak — convention in town",
-      createdAt: new Date("2026-03-01T06:00:00Z"),
-      updatedAt: new Date("2026-03-01T06:00:00Z"),
-    },
-    {
-      id: "occ_002",
-      organizationId: "org_placeholder_001",
-      date: new Date("2026-02-27T00:00:00Z"),
-      hotelGuests: 2100,
-      restaurantCovers: 1560,
-      createdAt: new Date("2026-02-28T06:00:00Z"),
-      updatedAt: new Date("2026-02-28T06:00:00Z"),
-    },
-    {
-      id: "occ_003",
-      organizationId: "org_placeholder_001",
-      date: new Date("2026-02-26T00:00:00Z"),
-      hotelGuests: 1980,
-      restaurantCovers: 1420,
-      createdAt: new Date("2026-02-27T06:00:00Z"),
-      updatedAt: new Date("2026-02-27T06:00:00Z"),
-    },
-  ];
+    // Build the Prisma where clause with RBAC scoping
+    const where: Record<string, unknown> = {};
 
-  let filtered = filterByScope(user, placeholderOccupancy as unknown as Record<string, unknown>[]) as unknown as HotelOccupancy[];
+    if ([UserRoleType.VP, UserRoleType.DIRECTOR].includes(user.role)) {
+      // VP/Director: see all organizations; optionally filter by query param
+      if (orgIdParam) {
+        where.organizationId = orgIdParam;
+      }
+    } else {
+      // Admin / Room Manager: restricted to their own organization
+      if (!user.organizationId) {
+        return NextResponse.json(
+          { success: false, error: "User has no associated organization" },
+          { status: 403 },
+        );
+      }
+      where.organizationId = user.organizationId;
+    }
 
-  // Apply date range filter on placeholder data
-  if (from) {
-    const fromDate = new Date(from);
-    filtered = filtered.filter((o) => new Date(o.date) >= fromDate);
-  }
-  if (to) {
-    const toDate = new Date(to);
-    filtered = filtered.filter((o) => new Date(o.date) <= toDate);
-  }
+    // Date range filter
+    if (from || to) {
+      const dateFilter: Record<string, Date> = {};
+      if (from) dateFilter.gte = new Date(from);
+      if (to) dateFilter.lte = new Date(to);
+      where.date = dateFilter;
+    }
 
-  return NextResponse.json(
-    {
-      success: true,
-      data: {
-        data: filtered,
-        total: filtered.length,
-        page: 1,
-        pageSize: 20,
-        totalPages: 1,
+    // Execute count + query in parallel
+    const [total, rows] = await Promise.all([
+      prisma.hotelOccupancy.count({ where }),
+      prisma.hotelOccupancy.findMany({
+        where,
+        orderBy: { date: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    const data = rows.map(toHotelOccupancy);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          data,
+          total,
+          page,
+          pageSize,
+          totalPages: Math.ceil(total / pageSize),
+        },
       },
-    },
-    { status: 200 },
-  );
+      { status: 200 },
+    );
+  } catch (err) {
+    console.error("Error fetching occupancy data:", err);
+    return NextResponse.json(
+      { success: false, error: "Failed to fetch occupancy data" },
+      { status: 500 },
+    );
+  }
 }
+
+// -----------------------------------------------------------------------------
+// POST /api/admin/occupancy
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/admin/occupancy
  *
- * Add a new hotel occupancy entry. Restricted to Admin+ roles.
+ * Create or update a hotel occupancy entry (upsert by organizationId + date).
+ * Restricted to Admin+ roles.
  *
- * Full implementation will:
- * - Validate required fields (date, hotelGuests, restaurantCovers)
- * - Check for duplicate date entries for the same organization
- * - If a record already exists for that date, update it instead (upsert)
- * - Admin can only add for their own organization
- * - VP/Director can add for any organization
- * - Return the created/updated occupancy record
+ * Request body:
+ *   - date              — The occupancy date (ISO string, required)
+ *   - hotelGuests       — Number of hotel guests (non-negative integer, required)
+ *   - restaurantCovers  — Number of restaurant covers (non-negative integer, required)
+ *   - notes             — Optional free-text note
+ *   - organizationId    — Target organization (VP/Director only; Admin uses own)
+ *
+ * If a record already exists for the same organization + date, it is updated.
  */
 export async function POST(request: Request): Promise<NextResponse<ApiResponse<HotelOccupancy>>> {
   const user = await getAuthUser(request);
@@ -154,32 +208,51 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse<H
       );
     }
 
-    // VP/Director can specify any organization; Admin uses their own.
-    const organizationId =
-      [UserRoleType.VP, UserRoleType.DIRECTOR].includes(user.role) && body.organizationId
-        ? body.organizationId
-        : user.organizationId ?? "org_placeholder_001";
+    // VP/Director can specify any organization; Admin uses their own
+    let organizationId: string;
+    if ([UserRoleType.VP, UserRoleType.DIRECTOR].includes(user.role) && body.organizationId) {
+      organizationId = body.organizationId;
+    } else if (user.organizationId) {
+      organizationId = user.organizationId;
+    } else {
+      return NextResponse.json(
+        { success: false, error: "User has no associated organization" },
+        { status: 403 },
+      );
+    }
 
-    // TODO: Replace with real database upsert.
-    const newOccupancy: HotelOccupancy = {
-      id: `occ_${Date.now()}`,
-      organizationId,
-      date: new Date(body.date),
-      hotelGuests: body.hotelGuests,
-      restaurantCovers: body.restaurantCovers,
-      notes: body.notes,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const occupancyDate = new Date(body.date);
+
+    const row = await prisma.hotelOccupancy.upsert({
+      where: {
+        organizationId_date: {
+          organizationId,
+          date: occupancyDate,
+        },
+      },
+      create: {
+        organizationId,
+        date: occupancyDate,
+        hotelGuests: body.hotelGuests,
+        restaurantCovers: body.restaurantCovers,
+        notes: body.notes ?? null,
+      },
+      update: {
+        hotelGuests: body.hotelGuests,
+        restaurantCovers: body.restaurantCovers,
+        notes: body.notes ?? null,
+      },
+    });
 
     return NextResponse.json(
-      { success: true, data: newOccupancy },
+      { success: true, data: toHotelOccupancy(row) },
       { status: 201 },
     );
-  } catch {
+  } catch (err) {
+    console.error("Error upserting occupancy record:", err);
     return NextResponse.json(
-      { success: false, error: "Invalid request body" },
-      { status: 400 },
+      { success: false, error: "Failed to save occupancy record" },
+      { status: 500 },
     );
   }
 }

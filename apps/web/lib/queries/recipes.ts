@@ -70,6 +70,7 @@ export async function getRecipeList() {
         include: {
           product: {
             select: {
+              id: true,
               name: true,
               sku: true,
               category: true,
@@ -93,13 +94,15 @@ export async function getRecipeList() {
       const ingCost = unitCost * ing.quantity;
       totalCost += ingCost;
       return {
+        id: ing.id,
+        productId: ing.product.id,
         productName: ing.product.name,
         productSku: ing.product.sku,
         quantity: ing.quantity,
         unit: ing.unit,
         unitCost,
-        totalCost: Math.round(ingCost * 100) / 100,
-        notes: ing.notes,
+        cost: Math.round(ingCost * 100) / 100,
+        notes: ing.notes ?? null,
       };
     });
 
@@ -114,11 +117,12 @@ export async function getRecipeList() {
     return {
       id: recipe.id,
       name: recipe.name,
-      description: recipe.description,
-      category: recipe.category ?? "Cocktail",
-      outletName: recipe.outlet?.name ?? "All outlets",
+      description: recipe.description ?? null,
+      category: recipe.category ?? null,
+      outletId: recipe.outletId ?? null,
+      outletName: recipe.outlet?.name ?? null,
       yieldServings: recipe.yieldServings,
-      sellingPrice: recipe.sellingPrice,
+      sellingPrice: recipe.sellingPrice ?? null,
       totalCost: Math.round(totalCost * 100) / 100,
       costPerServing,
       marginPct,

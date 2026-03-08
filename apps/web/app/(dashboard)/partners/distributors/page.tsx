@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -62,7 +63,8 @@ export default async function DistributorsPage() {
       {/* Distributor Cards */}
       <div className="grid gap-4 md:grid-cols-2">
         {distributors.map((distributor) => (
-          <Card key={distributor.id}>
+          <Link key={distributor.id} href={`/partners/distributors/${distributor.id}`}>
+          <Card className="cursor-pointer hover:ring-2 hover:ring-[#06113e]/20 transition-all">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg text-[#06113e]">
@@ -104,6 +106,7 @@ export default async function DistributorsPage() {
               </div>
             </CardContent>
           </Card>
+          </Link>
         ))}
       </div>
 
@@ -144,8 +147,10 @@ export default async function DistributorsPage() {
                       key={dist.id}
                       className="border-b hover:bg-gray-50/30"
                     >
-                      <td className="px-4 py-3 font-medium text-[#06113e]">
-                        {dist.name}
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`/partners/distributors/${dist.id}`} className="text-[#06113e] hover:underline">
+                          {dist.name}
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-right">
                         {dist.productCount}

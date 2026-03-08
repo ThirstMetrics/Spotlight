@@ -7,20 +7,50 @@ import { Category, UserRoleType } from "@spotlight/shared";
 import type { ApiResponse, PaginatedResponse, Product } from "@spotlight/shared";
 import { getAuthUser } from "@/lib/auth";
 import { checkPermission } from "@/lib/rbac";
+import { prisma, Prisma } from "@spotlight/db";
+
+/**
+ * Map a Prisma product record to the shared Product interface.
+ *
+ * The Prisma model omits `brand` and `description` (which are optional on the
+ * shared type) and has `size`/`unit` as nullable. This helper normalizes the
+ * shape so API consumers always receive a consistent type.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toProduct(record: Record<string, any>): Product {
+  return {
+    id: record.id,
+    sku: record.sku,
+    name: record.name,
+    category: record.category as Category,
+    subcategory: record.subcategory ?? undefined,
+    size: record.size ?? "",
+    unit: record.unit ?? "",
+    isActive: record.isActive,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
 
 /**
  * GET /api/products
  *
  * List products from the master catalog with optional filters.
  *
- * Full implementation will:
- * - Query products table with optional filters: category, search term, brand, isActive
- * - Distributors see only products they carry (join through distributor_products)
- * - Suppliers see only their own products (join through distributor_products.supplierId)
- * - Support pagination and sorting (by name, category, brand)
- * - Include distributor cost info when user has appropriate access
+ * Supports query parameters:
+ * - `category` — filter by Category enum value (BEER, WINE, SPIRITS, SAKE)
+ * - `search`   — free-text search across name, sku, and brand
+ * - `page`     — page number (default 1)
+ * - `pageSize` — results per page (default 20, max 100)
+ *
+ * RBAC scoping:
+ * - VP / DIRECTOR / ADMIN / ROOM_MANAGER: see all products
+ * - DISTRIBUTOR: only products they carry (via distributor_products)
+ * - SUPPLIER: only products they supply (via distributor_products)
  */
-export async function GET(request: Request): Promise<NextResponse<ApiResponse<PaginatedResponse<Product>>>> {
+export async function GET(
+  request: Request,
+): Promise<NextResponse<ApiResponse<PaginatedResponse<Product>>>> {
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json(
@@ -39,79 +69,73 @@ export async function GET(request: Request): Promise<NextResponse<ApiResponse<Pa
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category") as Category | null;
   const search = searchParams.get("search");
-  const page = parseInt(searchParams.get("page") ?? "1", 10);
-  const pageSize = parseInt(searchParams.get("pageSize") ?? "20", 10);
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+  const pageSize = Math.min(
+    100,
+    Math.max(1, parseInt(searchParams.get("pageSize") ?? "20", 10)),
+  );
 
-  // TODO: Replace with real database query using filters.
-  const placeholderProducts: Product[] = [
-    {
-      id: "prod_001",
-      sku: "BV-CAB-001",
-      name: "Cabernet Sauvignon Reserve 2022",
-      category: Category.WINE,
-      subcategory: "Red Wine",
-      brand: "Napa Valley Vineyards",
-      size: "750ml",
-      unit: "bottle",
-      description: "Premium Napa Valley Cabernet Sauvignon",
-      isActive: true,
-      createdAt: new Date("2025-01-01T00:00:00Z"),
-      updatedAt: new Date("2025-01-01T00:00:00Z"),
-    },
-    {
-      id: "prod_002",
-      sku: "SP-VOD-001",
-      name: "Premium Vodka",
-      category: Category.SPIRITS,
-      subcategory: "Vodka",
-      brand: "Crystal Clear",
-      size: "1L",
-      unit: "bottle",
-      description: "Triple-distilled premium vodka",
-      isActive: true,
-      createdAt: new Date("2025-01-01T00:00:00Z"),
-      updatedAt: new Date("2025-01-01T00:00:00Z"),
-    },
-    {
-      id: "prod_003",
-      sku: "BR-IPA-001",
-      name: "West Coast IPA",
-      category: Category.BEER,
-      subcategory: "IPA",
-      brand: "Pacific Brewing Co.",
-      size: "12oz",
-      unit: "can",
-      description: "Hoppy West Coast style IPA",
-      isActive: true,
-      createdAt: new Date("2025-01-01T00:00:00Z"),
-      updatedAt: new Date("2025-01-01T00:00:00Z"),
-    },
-  ];
+  // ---- Build the where clause ----
 
-  // Apply category filter if provided
-  let filtered = placeholderProducts;
-  if (category) {
-    filtered = filtered.filter((p) => p.category === category);
+  const where: Prisma.ProductWhereInput = {
+    isActive: true,
+  };
+
+  // Category filter
+  if (category && Object.values(Category).includes(category)) {
+    where.category = category;
   }
+
+  // Free-text search across name, sku (brand is not in Prisma model)
   if (search) {
-    const term = search.toLowerCase();
-    filtered = filtered.filter(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        p.sku.toLowerCase().includes(term) ||
-        (p.brand && p.brand.toLowerCase().includes(term)),
-    );
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { sku: { contains: search, mode: "insensitive" } },
+    ];
   }
+
+  // ---- RBAC scoping ----
+
+  if (user.role === UserRoleType.DISTRIBUTOR && user.distributorId) {
+    // Distributors only see products they carry
+    where.distributorProducts = {
+      some: {
+        distributorId: user.distributorId,
+      },
+    };
+  } else if (user.role === UserRoleType.SUPPLIER && user.supplierId) {
+    // Suppliers only see products they supply (across all distributors)
+    where.distributorProducts = {
+      some: {
+        supplierId: user.supplierId,
+      },
+    };
+  }
+  // VP, DIRECTOR, ADMIN, ROOM_MANAGER — no additional scoping needed
+
+  // ---- Execute query with pagination ----
+
+  const [records, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
+  ]);
+
+  const products = records.map(toProduct);
 
   return NextResponse.json(
     {
       success: true,
       data: {
-        data: filtered,
-        total: filtered.length,
+        data: products,
+        total,
         page,
         pageSize,
-        totalPages: Math.ceil(filtered.length / pageSize),
+        totalPages: Math.ceil(total / pageSize),
       },
     },
     { status: 200 },
@@ -123,14 +147,14 @@ export async function GET(request: Request): Promise<NextResponse<ApiResponse<Pa
  *
  * Create a new product in the master catalog.
  *
- * Full implementation will:
- * - Validate required fields (sku, name, category, size, unit)
- * - Check for duplicate SKU
- * - Create the product record in the database
- * - Optionally link to distributor via distributor_products
- * - Return the created product
+ * Required fields: sku, name, category, size, unit.
+ * Optional fields: subcategory.
+ *
+ * Returns 409 if a product with the same SKU already exists.
  */
-export async function POST(request: Request): Promise<NextResponse<ApiResponse<Product>>> {
+export async function POST(
+  request: Request,
+): Promise<NextResponse<ApiResponse<Product>>> {
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json(
@@ -156,24 +180,41 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse<P
       );
     }
 
-    // TODO: Replace with real database insert.
-    const newProduct: Product = {
-      id: `prod_${Date.now()}`,
-      sku: body.sku,
-      name: body.name,
-      category: body.category,
-      subcategory: body.subcategory,
-      brand: body.brand,
-      size: body.size,
-      unit: body.unit,
-      description: body.description,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    // Validate category enum value
+    if (!Object.values(Category).includes(body.category)) {
+      return NextResponse.json(
+        { success: false, error: `Invalid category. Must be one of: ${Object.values(Category).join(", ")}` },
+        { status: 400 },
+      );
+    }
+
+    // Check for duplicate SKU
+    const existing = await prisma.product.findUnique({
+      where: { sku: body.sku },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: `A product with SKU "${body.sku}" already exists` },
+        { status: 409 },
+      );
+    }
+
+    // Create the product
+    const record = await prisma.product.create({
+      data: {
+        sku: body.sku,
+        name: body.name,
+        category: body.category,
+        subcategory: body.subcategory ?? null,
+        size: body.size,
+        unit: body.unit,
+        isActive: true,
+      },
+    });
 
     return NextResponse.json(
-      { success: true, data: newProduct },
+      { success: true, data: toProduct(record) },
       { status: 201 },
     );
   } catch {

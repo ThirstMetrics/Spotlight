@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -7,32 +8,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getAlertRules } from "@/lib/queries/admin";
 import { prisma } from "@spotlight/db";
-
-const TYPE_LABELS: Record<string, string> = {
-  MANDATE_COMPLIANCE: "Mandate Compliance",
-  PULL_THROUGH_HIGH: "Pull-Through High",
-  PULL_THROUGH_LOW: "Pull-Through Low",
-  DAYS_OF_INVENTORY: "Days of Inventory",
-  NEW_DIRECT_ITEM: "New Direct Item",
-  PRICE_DISCREPANCY: "Price Discrepancy",
-  PRICE_CHANGE: "Price Change",
-  COST_GOAL_EXCEEDED: "Cost Goal Exceeded",
-};
-
-const TYPE_CATEGORIES: Record<string, string> = {
-  MANDATE_COMPLIANCE: "Compliance",
-  PULL_THROUGH_HIGH: "Inventory",
-  PULL_THROUGH_LOW: "Inventory",
-  DAYS_OF_INVENTORY: "Inventory",
-  NEW_DIRECT_ITEM: "Inventory",
-  PRICE_DISCREPANCY: "Price",
-  PRICE_CHANGE: "Price",
-  COST_GOAL_EXCEEDED: "Cost",
-};
+import { AlertRulesTable } from "./AlertRulesTable";
 
 export default async function AlertRulesPage() {
   const [rules, alertStats] = await Promise.all([
@@ -56,7 +35,13 @@ export default async function AlertRulesPage() {
           Alert Rules
         </h1>
         <p className="text-muted-foreground">
-          Configure alert thresholds and manage notification rules.
+          Configure alert thresholds and manage notification rules.{" "}
+          <Link
+            href="/admin/alerts/feed"
+            className="text-[#5ad196] hover:underline font-medium"
+          >
+            View Alert Feed →
+          </Link>
         </p>
       </div>
 
@@ -99,85 +84,7 @@ export default async function AlertRulesPage() {
               with default thresholds.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50/50">
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Rule Type
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Threshold
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Scope
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-600">
-                      Active Alerts
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Created By
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rules.map((rule) => (
-                    <tr
-                      key={rule.id}
-                      className="border-b hover:bg-gray-50/30"
-                    >
-                      <td className="px-4 py-3 font-medium text-[#06113e]">
-                        {TYPE_LABELS[rule.alertType] ?? rule.alertType}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="secondary" className="text-xs">
-                          {TYPE_CATEGORIES[rule.alertType] ?? "Other"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {rule.thresholdValue != null
-                          ? `${rule.thresholdValue}${rule.thresholdUnit ?? ""}`
-                          : "Default"}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs">
-                        {rule.appliesToProduct
-                          ? rule.appliesToProduct
-                          : rule.appliesToOutlet}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            rule.isEnabled
-                              ? "bg-[#5ad196] text-white"
-                              : "bg-gray-200 text-gray-600"
-                          }`}
-                        >
-                          {rule.isEnabled ? "Enabled" : "Disabled"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {rule.activeAlerts > 0 ? (
-                          <span className="text-amber-600">
-                            {rule.activeAlerts}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs">
-                        {rule.createdBy}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <AlertRulesTable data={rules} />
           )}
         </CardContent>
       </Card>

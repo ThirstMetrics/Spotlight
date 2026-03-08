@@ -3,32 +3,35 @@
 // =============================================================================
 
 import { NextResponse } from "next/server";
-import { Category, UserRoleType } from "@spotlight/shared";
+import { UserRoleType } from "@spotlight/shared";
 import type { ApiResponse, PaginatedResponse, OrderHistory } from "@spotlight/shared";
+import { prisma } from "@spotlight/db";
 import { getAuthUser } from "@/lib/auth";
-import { checkPermission, filterByScope } from "@/lib/rbac";
+import { checkPermission } from "@/lib/rbac";
+import type { Prisma } from "@spotlight/db";
 
 /**
  * GET /api/orders
  *
  * Retrieve order history with filtering by date range, outlet, product, and distributor.
  *
- * Full implementation will:
- * - Query order_history table with user's scope filter applied
- * - Support query params:
- *   - from, to (date range)
- *   - outletId / outletIds (comma-separated)
- *   - productId
- *   - distributorId
- *   - category (BEER, WINE, SPIRITS, SAKE)
- *   - search (product name or SKU)
- * - VP/Director: all orders across all organizations
- * - Admin: all orders within their organization
- * - Room Manager: orders for their assigned outlets only
- * - Distributor: orders for their products only
- * - Supplier: orders for products they supply across all distributors
- * - Support pagination, sorting by orderDate, totalCost, quantity
- * - Include product and outlet names via joins
+ * Query params:
+ *   - from, to (date range for orderDate)
+ *   - outletId (single outlet filter)
+ *   - productId (single product filter)
+ *   - distributorId (single distributor filter)
+ *   - page (default 1)
+ *   - pageSize (default 20)
+ *
+ * RBAC scoping:
+ *   - VP/DIRECTOR: all orders across all organizations
+ *   - ADMIN: orders within their organization
+ *   - ROOM_MANAGER: orders for their assigned outlets only
+ *   - DISTRIBUTOR: orders for their distributor only
+ *   - SUPPLIER: orders for products they supply (via supplierId on order or distributorProducts)
+ *
+ * Includes product (name, sku, category), outlet (name), and distributor (name) for display.
+ * Results ordered by orderDate descending.
  */
 export async function GET(request: Request): Promise<NextResponse<ApiResponse<PaginatedResponse<OrderHistory>>>> {
   const user = await getAuthUser(request);
@@ -55,82 +58,165 @@ export async function GET(request: Request): Promise<NextResponse<ApiResponse<Pa
   const page = parseInt(searchParams.get("page") ?? "1", 10);
   const pageSize = parseInt(searchParams.get("pageSize") ?? "20", 10);
 
-  // TODO: Replace with real database query using all filters.
-  const placeholderOrders: OrderHistory[] = [
-    {
-      id: "ord_001",
-      organizationId: "org_placeholder_001",
-      outletId: "out_001",
-      productId: "prod_001",
-      distributorId: "dist_001",
-      quantity: 24,
-      unit: "bottle",
-      unitCost: 42.50,
-      totalCost: 1020.00,
-      orderDate: new Date("2026-02-15T00:00:00Z"),
-      createdAt: new Date("2026-02-15T10:00:00Z"),
-      updatedAt: new Date("2026-02-15T10:00:00Z"),
-    },
-    {
-      id: "ord_002",
-      organizationId: "org_placeholder_001",
-      outletId: "out_002",
-      productId: "prod_002",
-      distributorId: "dist_001",
-      quantity: 12,
-      unit: "bottle",
-      unitCost: 28.00,
-      totalCost: 336.00,
-      orderDate: new Date("2026-02-18T00:00:00Z"),
-      createdAt: new Date("2026-02-18T14:00:00Z"),
-      updatedAt: new Date("2026-02-18T14:00:00Z"),
-    },
-    {
-      id: "ord_003",
-      organizationId: "org_placeholder_001",
-      outletId: "out_003",
-      productId: "prod_003",
-      distributorId: "dist_002",
-      quantity: 48,
-      unit: "can",
-      unitCost: 2.75,
-      totalCost: 132.00,
-      orderDate: new Date("2026-02-20T00:00:00Z"),
-      createdAt: new Date("2026-02-20T09:30:00Z"),
-      updatedAt: new Date("2026-02-20T09:30:00Z"),
-    },
-  ];
+  // ---------------------------------------------------------------------------
+  // Build the Prisma where clause
+  // ---------------------------------------------------------------------------
 
-  let filtered = filterByScope(user, placeholderOrders as unknown as Record<string, unknown>[]) as unknown as OrderHistory[];
+  const where: Prisma.OrderHistoryWhereInput = {};
 
-  // Apply client-side filters on placeholder data
+  // Date range filters
+  if (from || to) {
+    where.orderDate = {};
+    if (from) {
+      where.orderDate.gte = new Date(from);
+    }
+    if (to) {
+      where.orderDate.lte = new Date(to);
+    }
+  }
+
+  // Explicit query param filters
   if (outletId) {
-    filtered = filtered.filter((o) => o.outletId === outletId);
+    where.outletId = outletId;
   }
   if (productId) {
-    filtered = filtered.filter((o) => o.productId === productId);
+    where.productId = productId;
   }
   if (distributorId) {
-    filtered = filtered.filter((o) => o.distributorId === distributorId);
+    where.distributorId = distributorId;
   }
-  if (from) {
-    const fromDate = new Date(from);
-    filtered = filtered.filter((o) => new Date(o.orderDate) >= fromDate);
+
+  // ---------------------------------------------------------------------------
+  // RBAC scope restrictions
+  // ---------------------------------------------------------------------------
+
+  switch (user.role) {
+    case UserRoleType.VP:
+    case UserRoleType.DIRECTOR:
+      // Full access — no additional filtering
+      break;
+
+    case UserRoleType.ADMIN:
+      if (user.organizationId) {
+        where.organizationId = user.organizationId;
+      }
+      break;
+
+    case UserRoleType.ROOM_MANAGER:
+      if (user.outletIds && user.outletIds.length > 0) {
+        where.outletId = { in: user.outletIds };
+      } else {
+        // No assigned outlets — return empty result
+        return NextResponse.json(
+          {
+            success: true,
+            data: { data: [], total: 0, page, pageSize, totalPages: 0 },
+          },
+          { status: 200 },
+        );
+      }
+      break;
+
+    case UserRoleType.DISTRIBUTOR:
+      if (user.distributorId) {
+        where.distributorId = user.distributorId;
+      } else {
+        return NextResponse.json(
+          {
+            success: true,
+            data: { data: [], total: 0, page, pageSize, totalPages: 0 },
+          },
+          { status: 200 },
+        );
+      }
+      break;
+
+    case UserRoleType.SUPPLIER:
+      if (user.supplierId) {
+        // Filter orders where the supplier is directly tagged, or where the
+        // product is supplied by this supplier via the distributorProducts table.
+        where.OR = [
+          { supplierId: user.supplierId },
+          {
+            product: {
+              distributorProducts: {
+                some: { supplierId: user.supplierId },
+              },
+            },
+          },
+        ];
+      } else {
+        return NextResponse.json(
+          {
+            success: true,
+            data: { data: [], total: 0, page, pageSize, totalPages: 0 },
+          },
+          { status: 200 },
+        );
+      }
+      break;
+
+    default:
+      return NextResponse.json(
+        { success: false, error: "Insufficient permissions" },
+        { status: 403 },
+      );
   }
-  if (to) {
-    const toDate = new Date(to);
-    filtered = filtered.filter((o) => new Date(o.orderDate) <= toDate);
-  }
+
+  // ---------------------------------------------------------------------------
+  // Query the database
+  // ---------------------------------------------------------------------------
+
+  const [orders, total] = await Promise.all([
+    prisma.orderHistory.findMany({
+      where,
+      include: {
+        product: {
+          select: { name: true, sku: true, category: true, unit: true },
+        },
+        outlet: {
+          select: { name: true },
+        },
+        distributor: {
+          select: { name: true },
+        },
+      },
+      orderBy: { orderDate: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.orderHistory.count({ where }),
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // Map Prisma results to the OrderHistory shared type shape
+  // ---------------------------------------------------------------------------
+
+  const data: OrderHistory[] = orders.map((order) => ({
+    id: order.id,
+    organizationId: order.organizationId,
+    outletId: order.outletId,
+    productId: order.productId,
+    distributorId: order.distributorId,
+    quantity: order.quantity,
+    unit: order.product.unit ?? "each",
+    unitCost: order.costPerUnit,
+    totalCost: order.totalCost,
+    orderDate: order.orderDate,
+    uploadId: order.uploadId ?? undefined,
+    createdAt: order.createdAt,
+    updatedAt: order.createdAt,
+  }));
 
   return NextResponse.json(
     {
       success: true,
       data: {
-        data: filtered,
-        total: filtered.length,
+        data,
+        total,
         page,
         pageSize,
-        totalPages: Math.ceil(filtered.length / pageSize),
+        totalPages: Math.ceil(total / pageSize),
       },
     },
     { status: 200 },

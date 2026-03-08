@@ -1,12 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb } from "./breadcrumb";
+import { useAlertCount } from "@/lib/hooks/use-alert-count";
 
 export function Header() {
+  const { count } = useAlertCount();
+
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
       <Breadcrumb />
@@ -20,15 +24,19 @@ export function Header() {
           />
         </div>
 
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <Badge
-            variant="destructive"
-            className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]"
-          >
-            3
-          </Badge>
-        </Button>
+        <Link href="/admin/alerts/feed">
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            {count > 0 && (
+              <Badge
+                variant="destructive"
+                className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]"
+              >
+                {count > 99 ? "99+" : count}
+              </Badge>
+            )}
+          </Button>
+        </Link>
       </div>
     </header>
   );

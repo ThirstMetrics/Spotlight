@@ -7,16 +7,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getUploadHistory, getUploadStats } from "@/lib/queries/admin";
-
-const STATUS_COLORS: Record<string, string> = {
-  COMPLETED: "bg-[#5ad196] text-white",
-  PROCESSING: "bg-blue-500 text-white",
-  PENDING: "bg-amber-500 text-white",
-  FAILED: "bg-red-500 text-white",
-};
+import { UploadsTable } from "./UploadsTable";
+import { FileUploader } from "@/components/dashboard/FileUploader";
 
 const TYPE_LABELS: Record<string, string> = {
   WAREHOUSE_TRANSFER: "Warehouse Transfer",
@@ -67,6 +61,19 @@ export default async function UploadsPage() {
         />
       </div>
 
+      {/* Upload Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Upload Data File</CardTitle>
+          <CardDescription>
+            Upload a CSV or Excel file from your inventory or POS system
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FileUploader />
+        </CardContent>
+      </Card>
+
       {/* Upload Types */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {(
@@ -115,85 +122,7 @@ export default async function UploadsPage() {
               No uploads yet. Use the upload form above to import data files.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50/50">
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      File Name
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Source
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-600">
-                      Records
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Uploaded By
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {uploads.map((upload) => (
-                    <tr
-                      key={upload.id}
-                      className="border-b hover:bg-gray-50/30"
-                    >
-                      <td className="px-4 py-3 font-medium text-[#06113e]">
-                        {upload.fileName}
-                        <span className="text-xs text-muted-foreground ml-1">
-                          ({(upload.fileSize / 1024).toFixed(0)} KB)
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="secondary" className="text-xs">
-                          {TYPE_LABELS[upload.uploadType] ?? upload.uploadType}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {upload.uploadSource}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[upload.status] ?? "bg-gray-200"}`}
-                        >
-                          {upload.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {upload.recordsProcessed != null ? (
-                          <span>
-                            {upload.recordsProcessed}
-                            {(upload.recordsFailed ?? 0) > 0 && (
-                              <span className="text-red-500 ml-1">
-                                ({upload.recordsFailed} failed)
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {upload.uploader.name}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(upload.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <UploadsTable data={uploads} />
           )}
         </CardContent>
       </Card>

@@ -1,25 +1,44 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { setToken, setStoredUser } from "@/lib/auth";
 
 export default function PortalLoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
+    setError("");
 
-    // TODO: Implement actual authentication against Supabase Auth
-    // For now, this is a placeholder that simulates a login attempt
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      // Redirect to portal dashboard on success
-      // router.push("/dashboard");
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setError(data.error || "Login failed. Please try again.");
+        return;
+      }
+
+      // Store token and user info
+      setToken(data.data.token);
+      setStoredUser(data.data.user);
+
+      // Redirect to dashboard
+      router.push("/dashboard");
     } catch {
-      // Handle error
+      setError("Unable to connect. Please try again later.");
     } finally {
       setIsLoading(false);
     }
@@ -48,6 +67,13 @@ export default function PortalLoginPage() {
             Sign in to access your distributor or supplier dashboard
           </p>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="rounded-md bg-red-50 border border-red-200 p-3">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-4">

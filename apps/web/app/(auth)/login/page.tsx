@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -14,19 +15,32 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useTheme } from "@/lib/theme";
+import { useAuth } from "@/lib/hooks/use-auth";
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const { theme, resolvedColors } = useTheme();
+  const { login, isLoading, error } = useAuth();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo") || "/overview";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    // TODO: Integrate with Supabase Auth or local JWT auth
-    // For now, redirect to dashboard
-    window.location.href = "/overview";
+    await login(email, password);
+    // Redirect on success — check store directly since state update is async
+    const state = useAuth.getState();
+    if (state.user) {
+      window.location.href = returnTo;
+    }
   }
 
   return (
@@ -91,7 +105,6 @@ export default function LoginPage() {
       <div className="flex w-full lg:w-1/2 items-center justify-center bg-muted/50 p-4">
         <Card className="w-full max-w-md shadow-lg">
           <CardHeader className="text-center">
-            {/* Mobile logo — shows only on small screens */}
             <div className="mx-auto mb-4 lg:hidden">
               <Image
                 src="/logos/spotlight-horizontal-navy.svg"
@@ -102,7 +115,6 @@ export default function LoginPage() {
                 priority
               />
             </div>
-            {/* Desktop — text only since logo is on the left panel */}
             <div className="hidden lg:block mb-2">
               <Image
                 src="/logos/spotlight-icon-navy.svg"
@@ -120,6 +132,11 @@ export default function LoginPage() {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {error && (
+                <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium">
                   Email
@@ -159,13 +176,13 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full text-white font-medium"
-                disabled={loading}
+                disabled={isLoading}
                 style={{
                   backgroundColor: resolvedColors.primary,
                   borderColor: resolvedColors.primary,
                 }}
               >
-                {loading ? "Signing in..." : "Sign In"}
+                {isLoading ? "Signing in..." : "Sign In"}
               </Button>
               <p className="text-sm text-muted-foreground text-center">
                 Don&apos;t have an account?{" "}

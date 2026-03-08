@@ -21,12 +21,18 @@ interface CostGoalChartProps {
 }
 
 export function CostGoalChart({ data }: CostGoalChartProps) {
+  // Truncate long outlet names for small screens
+  const chartData = data.map((d) => ({
+    ...d,
+    shortName: d.name.length > 14 ? d.name.slice(0, 13) + "…" : d.name,
+  }));
+
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }} layout="vertical">
+    <ResponsiveContainer width="100%" height={Math.max(280, data.length * 32 + 40)}>
+      <BarChart data={chartData} margin={{ top: 5, right: 15, left: 5, bottom: 5 }} layout="vertical">
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-        <XAxis type="number" tick={{ fontSize: 12, fill: "#64748b" }} domain={[0, 50]} tickFormatter={(v) => `${v}%`} />
-        <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} width={120} />
+        <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} domain={[0, 40]} tickFormatter={(v) => `${v}%`} />
+        <YAxis type="category" dataKey="shortName" tick={{ fontSize: 10, fill: "#64748b" }} width={100} />
         <Tooltip
           formatter={(value: number) => [`${value}%`, ""]}
           contentStyle={{

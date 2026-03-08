@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -98,8 +99,10 @@ export default async function SuppliersPage() {
                       key={supplier.id}
                       className="border-b hover:bg-gray-50/30"
                     >
-                      <td className="px-4 py-3 font-medium text-[#06113e]">
-                        {supplier.name}
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`/partners/suppliers/${supplier.id}`} className="text-[#06113e] hover:underline">
+                          {supplier.name}
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {supplier.topProducts.join(", ") || "—"}

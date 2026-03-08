@@ -7,17 +7,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getCatalogOverview, getCatalogProducts } from "@/lib/queries/catalog";
+import { CatalogTable } from "./CatalogTable";
 
 export default async function CatalogPage() {
   const [overview, products] = await Promise.all([
     getCatalogOverview(),
     getCatalogProducts(),
   ]);
-
-  const formatCurrency = (n: number) => `$${n.toFixed(2)}`;
 
   return (
     <div className="space-y-6">
@@ -59,102 +57,7 @@ export default async function CatalogPage() {
               ingestion or can be added manually.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50/50">
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Product
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      SKU
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Size
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-600">
-                      Distributors
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-gray-600">
-                      Avg Cost
-                    </th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-600">
-                      Substitutions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((product) => (
-                    <tr
-                      key={product.id}
-                      className="border-b hover:bg-gray-50/30"
-                    >
-                      <td className="px-4 py-3 font-medium text-[#06113e]">
-                        {product.name}
-                        {product.subcategory && (
-                          <span className="text-xs text-muted-foreground block">
-                            {product.subcategory}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                        {product.sku}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="secondary" className="text-xs">
-                          {product.category}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {product.size ?? "—"}
-                        {product.unit ? ` ${product.unit}` : ""}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {product.distributorCount > 0 ? (
-                          <span
-                            className="cursor-help"
-                            title={product.distributors
-                              .map((d) => `${d.name} (${d.supplierName})`)
-                              .join(", ")}
-                          >
-                            {product.distributorCount}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {product.avgCost > 0
-                          ? formatCurrency(product.avgCost)
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {product.substitutions.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {product.substitutions.map((sub) => (
-                              <Badge
-                                key={sub.id}
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {sub.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">
-                            None
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <CatalogTable data={products} />
           )}
         </CardContent>
       </Card>

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import {
   Card,
   CardContent,
@@ -5,39 +7,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getMapData } from "@/lib/queries/map";
+import OutletMap from "./OutletMap";
 
-export default function MapPage() {
+export default async function MapPage() {
+  const { outlets, summary } = await getMapData();
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Map View</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
+          Map View
+        </h1>
         <p className="text-muted-foreground">
-          Geographic visualization of product placement across outlets.
+          Geographic visualization of product placement across Resorts World
+          outlets.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Outlet Map</CardTitle>
-          <CardDescription>
-            Interactive map showing outlets, product placement, and distribution
-            coverage
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex h-[500px] items-center justify-center rounded-md border border-dashed">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">
-                Mapbox GL JS map will render here
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Requires NEXT_PUBLIC_MAP_TOKEN environment variable
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Metric Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -46,7 +34,9 @@ export default function MapPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">10</div>
+            <div className="text-2xl font-bold text-[#06113e]">
+              {summary.totalOutlets}
+            </div>
             <p className="text-xs text-muted-foreground">
               All outlets geocoded
             </p>
@@ -55,30 +45,48 @@ export default function MapPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
-              Product Pins
+              Active Products
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">247</div>
+            <div className="text-2xl font-bold text-[#06113e]">
+              {summary.totalProducts.toLocaleString()}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Unique products mapped
+              Unique products in catalog
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
-              Distribution Routes
+              Active Distributors
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">4</div>
+            <div className="text-2xl font-bold text-[#06113e]">
+              {summary.totalDistributors}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Active distributor routes
+              Distribution partners
             </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Map */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Resorts World Las Vegas — Outlet Map</CardTitle>
+          <CardDescription>
+            Click an outlet marker to view order volume, product count, and
+            sales data. Marker size reflects relative order volume.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <OutletMap outlets={outlets} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

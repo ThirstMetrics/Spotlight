@@ -6,6 +6,8 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
+import { useAuth } from "@/lib/hooks/use-auth";
+import { useMessageCount } from "@/lib/hooks/use-message-count";
 import {
   LayoutDashboard,
   Store,
@@ -21,7 +23,6 @@ import {
   MessageSquare,
   BarChart3,
   Settings,
-  Bell,
   ChevronLeft,
   Menu,
   LogOut,
@@ -79,6 +80,17 @@ export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { theme } = useTheme();
+  const { user, logout } = useAuth();
+  const unreadMessageCount = useMessageCount();
+
+  const displayName = user?.name ?? "User";
+  const displayRole = user?.role ?? "Director";
+  const initials = displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <aside
@@ -139,7 +151,7 @@ export function Sidebar() {
         >
           <p className="text-xs opacity-60">Property</p>
           <p className="text-sm font-medium truncate">Resorts World Las Vegas</p>
-          <p className="text-xs opacity-60">Director</p>
+          <p className="text-xs opacity-60 capitalize">{displayRole}</p>
         </div>
       )}
 
@@ -154,12 +166,14 @@ export function Sidebar() {
             )}
             {group.items.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+              const isMessagesLink = item.href === "/messages";
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-2 text-sm transition-colors",
+                    "flex items-center gap-3 px-4 py-2 text-sm transition-colors relative",
                     isActive
                       ? "font-medium border-r-2"
                       : "opacity-70 hover:opacity-100",
@@ -178,6 +192,16 @@ export function Sidebar() {
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
                   {!collapsed && <span>{item.label}</span>}
+                  {!collapsed && isMessagesLink && unreadMessageCount > 0 && (
+                    <span className="ml-auto inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-500 text-white text-xs font-medium">
+                      {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+                    </span>
+                  )}
+                  {collapsed && isMessagesLink && unreadMessageCount > 0 && (
+                    <span className="absolute top-0 right-0 inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-500 text-white text-xs font-medium translate-x-2 -translate-y-2">
+                      {unreadMessageCount > 9 ? "9+" : unreadMessageCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -189,12 +213,12 @@ export function Sidebar() {
       <div className="p-4" style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
         <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-medium">
-            JD
+            {initials}
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">John Doe</p>
-              <p className="text-xs opacity-60">Director</p>
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              <p className="text-xs opacity-60 capitalize">{displayRole}</p>
             </div>
           )}
           {!collapsed && (
@@ -203,6 +227,8 @@ export function Sidebar() {
               size="icon"
               className="h-8 w-8 hover:bg-white/10"
               style={{ color: "var(--color-sidebar-foreground)" }}
+              onClick={logout}
+              title="Log out"
             >
               <LogOut className="h-4 w-4" />
             </Button>
