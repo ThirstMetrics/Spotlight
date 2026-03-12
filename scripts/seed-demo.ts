@@ -25,8 +25,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Pre-computed bcrypt hash for demo password "spotlight123" (10 salt rounds)
-const DEMO_PASSWORD_HASH = "$2b$10$EKtuqYO/ckDsdk4XEhWG3.AzEo5abYIwoM.QQUlPL38bjsX0TeJlS";
+// Pre-computed bcrypt hash for demo password "spotlight2025" (10 salt rounds)
+const DEMO_PASSWORD_HASH = "$2b$10$l/ovmDFCtZQLoNlXzDqJYeo1IY30IT5WWGbScpbijyJG0VMLX.EXK";
 
 // ============================================================
 // CAESARS -> RESORTS WORLD OUTLET MAPPING

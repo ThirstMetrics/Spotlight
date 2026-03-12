@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 interface OutletPin {
   id: string;
@@ -15,14 +17,18 @@ interface OutletPin {
 
 const OUTLET_TYPE_COLORS: Record<string, string> = {
   "Fine Dining": "#06113e",
+  "Steakhouse": "#06113e",
   "Restaurant": "#1e40af",
   "Wine Bar": "#7c3aed",
+  "Bar": "#db2777",
   "Cocktail Bar": "#db2777",
-  "Rooftop Bar": "#ea580c",
+  "Speakeasy": "#be185d",
   "Food Hall": "#ca8a04",
   "Bar & Grill": "#16a34a",
   "Lounge": "#5ad196",
+  "Lobby Bar": "#059669",
   "Nightlife": "#9333ea",
+  "Nightclub": "#9333ea",
   "Pool": "#0891b2",
 };
 
@@ -30,145 +36,116 @@ function getOutletColor(type: string): string {
   return OUTLET_TYPE_COLORS[type] ?? "#6b7280";
 }
 
-export default function OutletMap({ outlets }: { outlets: OutletPin[] }) {
+function OutletMapInner({ outlets }: { outlets: OutletPin[] }) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
-    // Inject Leaflet CSS if not already present
-    if (!document.querySelector('link[href*="leaflet"]')) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href =
-        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
-      link.integrity =
-        "sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKESxces60Mpoj+2okopSAcSUIUOseddDm0cxnGQzxIR7vJgsLZbdLE3w==";
-      link.crossOrigin = "";
-      document.head.appendChild(link);
+    // Fix the default icon path issue that occurs with bundlers
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+      iconUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+      shadowUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+    });
+
+    // Initialize map centered on Resorts World Las Vegas
+    const map = L.map(mapRef.current, {
+      center: [36.1341, -115.1677],
+      zoom: 17,
+      scrollWheelZoom: true,
+    });
+
+    mapInstanceRef.current = map;
+
+    // Use OpenStreetMap tiles (free, no API key required)
+    L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+      }
+    ).addTo(map);
+
+    // Compute the max order count for relative sizing
+    const maxOrders = Math.max(
+      ...outlets.map((o) => o.orderCount),
+      1
+    );
+
+    // Add circle markers for each outlet
+    for (const outlet of outlets) {
+      const color = getOutletColor(outlet.type);
+
+      // Scale radius: min 8, max 20, based on relative order volume
+      const radius = 8 + (outlet.orderCount / maxOrders) * 12;
+
+      const circle = L.circleMarker(outlet.position, {
+        radius,
+        fillColor: color,
+        color: "#06113e",
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.7,
+      }).addTo(map);
+
+      // Build popup HTML
+      const popupContent = `
+        <div style="min-width:200px;font-family:system-ui,-apple-system,sans-serif">
+          <div style="font-weight:700;font-size:14px;color:#06113e;margin-bottom:2px">
+            ${outlet.name}
+          </div>
+          <div style="color:#666;font-size:12px;margin-bottom:8px">
+            ${outlet.type}
+          </div>
+          <hr style="margin:0 0 8px 0;border:none;border-top:1px solid #e5e7eb"/>
+          <div style="font-size:12px;line-height:1.6">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:#666">Orders</span>
+              <strong style="color:#06113e">${outlet.orderCount.toLocaleString()}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:#666">Products</span>
+              <strong style="color:#06113e">${outlet.productCount.toLocaleString()}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:#666">Sales Records</span>
+              <strong style="color:#06113e">${outlet.salesCount.toLocaleString()}</strong>
+            </div>
+          </div>
+        </div>
+      `;
+
+      circle.bindPopup(popupContent, {
+        closeButton: true,
+        className: "spotlight-popup",
+      });
+
+      // Add a text label below each marker
+      const label = L.tooltip({
+        permanent: true,
+        direction: "bottom",
+        offset: [0, radius + 2],
+        className: "outlet-label",
+      }).setContent(
+        `<span style="font-size:10px;font-weight:600;color:#06113e;background:rgba(255,255,255,0.85);padding:1px 4px;border-radius:3px;white-space:nowrap">${outlet.name}</span>`
+      );
+      circle.bindTooltip(label);
     }
 
-    // Dynamically import Leaflet (avoids SSR issues since Leaflet requires window)
-    import("leaflet")
-      .then((L) => {
-        if (!mapRef.current) return;
-
-        // Fix the default icon path issue that occurs with bundlers
-        delete (L.Icon.Default.prototype as any)._getIconUrl;
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl:
-            "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-          iconUrl:
-            "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-          shadowUrl:
-            "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-        });
-
-        // Initialize map centered on Resorts World Las Vegas
-        const map = L.map(mapRef.current, {
-          center: [36.1372, -115.1689],
-          zoom: 17,
-          scrollWheelZoom: true,
-        });
-
-        mapInstanceRef.current = map;
-
-        // Use OpenStreetMap tiles (free, no API key required)
-        L.tileLayer(
-          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-          {
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19,
-          }
-        ).addTo(map);
-
-        // Compute the max order count for relative sizing
-        const maxOrders = Math.max(
-          ...outlets.map((o) => o.orderCount),
-          1
-        );
-
-        // Add circle markers for each outlet
-        for (const outlet of outlets) {
-          const color = getOutletColor(outlet.type);
-
-          // Scale radius: min 8, max 20, based on relative order volume
-          const radius = 8 + (outlet.orderCount / maxOrders) * 12;
-
-          const circle = L.circleMarker(outlet.position, {
-            radius,
-            fillColor: color,
-            color: "#06113e",
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.7,
-          }).addTo(map);
-
-          // Build popup HTML
-          const popupContent = `
-            <div style="min-width:200px;font-family:system-ui,-apple-system,sans-serif">
-              <div style="font-weight:700;font-size:14px;color:#06113e;margin-bottom:2px">
-                ${outlet.name}
-              </div>
-              <div style="color:#666;font-size:12px;margin-bottom:8px">
-                ${outlet.type}
-              </div>
-              <hr style="margin:0 0 8px 0;border:none;border-top:1px solid #e5e7eb"/>
-              <div style="font-size:12px;line-height:1.6">
-                <div style="display:flex;justify-content:space-between">
-                  <span style="color:#666">Orders</span>
-                  <strong style="color:#06113e">${outlet.orderCount.toLocaleString()}</strong>
-                </div>
-                <div style="display:flex;justify-content:space-between">
-                  <span style="color:#666">Products</span>
-                  <strong style="color:#06113e">${outlet.productCount.toLocaleString()}</strong>
-                </div>
-                <div style="display:flex;justify-content:space-between">
-                  <span style="color:#666">Sales Records</span>
-                  <strong style="color:#06113e">${outlet.salesCount.toLocaleString()}</strong>
-                </div>
-              </div>
-            </div>
-          `;
-
-          circle.bindPopup(popupContent, {
-            closeButton: true,
-            className: "spotlight-popup",
-          });
-
-          // Add a text label below each marker
-          const label = L.tooltip({
-            permanent: true,
-            direction: "bottom",
-            offset: [0, radius + 2],
-            className: "outlet-label",
-          }).setContent(
-            `<span style="font-size:10px;font-weight:600;color:#06113e;background:rgba(255,255,255,0.85);padding:1px 4px;border-radius:3px;white-space:nowrap">${outlet.name}</span>`
-          );
-          circle.bindTooltip(label);
-        }
-
-        // Fit map bounds to all markers with some padding
-        if (outlets.length > 0) {
-          const bounds = L.latLngBounds(
-            outlets.map((o) => o.position)
-          );
-          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
-        }
-
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load Leaflet:", err);
-        setError(
-          "Failed to load map library. Make sure the leaflet package is installed."
-        );
-        setIsLoading(false);
-      });
+    // Fit map bounds to all markers with some padding
+    if (outlets.length > 0) {
+      const bounds = L.latLngBounds(
+        outlets.map((o) => o.position)
+      );
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+    }
 
     // Cleanup on unmount
     return () => {
@@ -185,33 +162,10 @@ export default function OutletMap({ outlets }: { outlets: OutletPin[] }) {
   return (
     <div>
       {/* Map container */}
-      <div className="relative">
-        {isLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-md border bg-gray-50">
-            <div className="text-center">
-              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-[#06113e]" />
-              <p className="text-sm text-muted-foreground">
-                Loading map...
-              </p>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="flex h-[500px] items-center justify-center rounded-md border border-dashed border-red-300 bg-red-50">
-            <div className="text-center">
-              <p className="text-sm font-medium text-red-700">{error}</p>
-              <p className="mt-1 text-xs text-red-500">
-                Run: pnpm add leaflet @types/leaflet --filter @spotlight/web
-              </p>
-            </div>
-          </div>
-        )}
-        <div
-          ref={mapRef}
-          className="h-[500px] rounded-md border"
-          style={{ display: error ? "none" : "block" }}
-        />
-      </div>
+      <div
+        ref={mapRef}
+        className="h-[500px] rounded-md border"
+      />
 
       {/* Legend */}
       <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
@@ -293,3 +247,5 @@ export default function OutletMap({ outlets }: { outlets: OutletPin[] }) {
     </div>
   );
 }
+
+export default OutletMapInner;

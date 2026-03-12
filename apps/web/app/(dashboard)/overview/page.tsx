@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -19,8 +20,21 @@ import {
   getCostVsGoalByOutlet,
   getYoYComparison,
 } from "@/lib/queries/overview";
+import { getServerUser } from "@/lib/auth";
 
 export default async function OverviewPage() {
+  const user = await getServerUser();
+
+  // Distributor users → their own distributor detail page
+  if (user?.role === "DISTRIBUTOR" && user.distributorId) {
+    redirect(`/partners/distributors/${user.distributorId}`);
+  }
+
+  // Supplier users → their own supplier detail page
+  if (user?.role === "SUPPLIER" && user.supplierId) {
+    redirect(`/partners/suppliers/${user.supplierId}`);
+  }
+
   const [metrics, volumeData, topProducts, alerts, costGoal, yoy] =
     await Promise.all([
       getOverviewMetrics(),

@@ -9,9 +9,12 @@ export interface AuthUser {
   name: string;
   role: UserRoleType;
   organizationId?: string;
+  organizationName?: string;
   outletIds?: string[];
   distributorId?: string;
+  distributorName?: string;
   supplierId?: string;
+  supplierName?: string;
 }
 
 interface AuthState {

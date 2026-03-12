@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useMessageCount } from "@/lib/hooks/use-message-count";
+import { UserRoleType } from "@spotlight/shared";
 import {
   LayoutDashboard,
   Store,
@@ -29,12 +30,34 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const navGroups = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  roles?: UserRoleType[]; // If undefined, visible to all roles
+};
+
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+  roles?: UserRoleType[]; // If undefined, visible to all roles
+};
+
+const INTERNAL_ROLES = [
+  UserRoleType.VP,
+  UserRoleType.DIRECTOR,
+  UserRoleType.ADMIN,
+  UserRoleType.ROOM_MANAGER,
+];
+
+const navGroups: NavGroup[] = [
+  // ── Internal roles ────────────────────────────────────────────────
   {
     label: "Overview",
     items: [
       { href: "/overview", label: "Dashboard", icon: LayoutDashboard },
     ],
+    roles: INTERNAL_ROLES,
   },
   {
     label: "Operations",
@@ -44,6 +67,7 @@ const navGroups = [
       { href: "/inventory", label: "Inventory & Alerts", icon: Package },
       { href: "/direct", label: "Direct Orders", icon: Truck },
     ],
+    roles: INTERNAL_ROLES,
   },
   {
     label: "Finance",
@@ -52,6 +76,7 @@ const navGroups = [
       { href: "/recipes", label: "Recipes", icon: ChefHat },
       { href: "/catalog", label: "Catalog", icon: BookOpen },
     ],
+    roles: [UserRoleType.VP, UserRoleType.DIRECTOR, UserRoleType.ADMIN, UserRoleType.ROOM_MANAGER],
   },
   {
     label: "Partners",
@@ -60,12 +85,14 @@ const navGroups = [
       { href: "/partners/suppliers", label: "Suppliers", icon: Building2 },
       { href: "/map", label: "Map View", icon: Map },
     ],
+    roles: INTERNAL_ROLES,
   },
   {
     label: "Communication",
     items: [
       { href: "/messages", label: "Messages", icon: MessageSquare },
     ],
+    roles: INTERNAL_ROLES,
   },
   {
     label: "System",
@@ -73,8 +100,43 @@ const navGroups = [
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/admin", label: "Admin", icon: Settings },
     ],
+    roles: [UserRoleType.VP, UserRoleType.DIRECTOR, UserRoleType.ADMIN],
+  },
+  // ── Distributor portal ────────────────────────────────────────────
+  {
+    label: "My Portal",
+    items: [
+      { href: "/overview", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/partners/distributors", label: "My Products", icon: Package },
+      { href: "/partners/suppliers", label: "Suppliers", icon: Building2 },
+      { href: "/map", label: "Map View", icon: Map },
+      { href: "/messages", label: "Messages", icon: MessageSquare },
+    ],
+    roles: [UserRoleType.DISTRIBUTOR],
+  },
+  // ── Supplier portal ───────────────────────────────────────────────
+  {
+    label: "My Portal",
+    items: [
+      { href: "/overview", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/partners/suppliers", label: "My Products", icon: Package },
+      { href: "/map", label: "Map View", icon: Map },
+      { href: "/messages", label: "Messages", icon: MessageSquare },
+    ],
+    roles: [UserRoleType.SUPPLIER],
   },
 ];
+
+function getVisibleNavGroups(role: UserRoleType | undefined): NavGroup[] {
+  if (!role) return navGroups; // fallback: show all (shouldn't happen)
+  return navGroups
+    .filter((group) => !group.roles || group.roles.includes(role))
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.roles || item.roles.includes(role)),
+    }))
+    .filter((group) => group.items.length > 0);
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -84,7 +146,8 @@ export function Sidebar() {
   const unreadMessageCount = useMessageCount();
 
   const displayName = user?.name ?? "User";
-  const displayRole = user?.role ?? "Director";
+  const displayRole = user?.role ?? "";
+  const visibleGroups = getVisibleNavGroups(user?.role as UserRoleType | undefined);
   const initials = displayName
     .split(" ")
     .map((n) => n[0])
@@ -143,21 +206,31 @@ export function Sidebar() {
         </Button>
       </div>
 
-      {/* Property Info */}
+      {/* Property / Portal Info */}
       {!collapsed && (
         <div
           className="px-4 py-3"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
         >
-          <p className="text-xs opacity-60">Property</p>
-          <p className="text-sm font-medium truncate">Resorts World Las Vegas</p>
-          <p className="text-xs opacity-60 capitalize">{displayRole}</p>
+          {user?.role === "DISTRIBUTOR" || user?.role === "SUPPLIER" ? (
+            <>
+              <p className="text-xs opacity-60">{user.role === "DISTRIBUTOR" ? "Distributor" : "Supplier"} Portal</p>
+              <p className="text-sm font-medium truncate">Resorts World Las Vegas</p>
+              <p className="text-xs opacity-60 capitalize">{displayRole}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs opacity-60">Property</p>
+              <p className="text-sm font-medium truncate">Resorts World Las Vegas</p>
+              <p className="text-xs opacity-60 capitalize">{displayRole}</p>
+            </>
+          )}
         </div>
       )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} className="mb-2">
             {!collapsed && (
               <p className="px-4 py-1 text-xs font-medium uppercase tracking-wider opacity-50">

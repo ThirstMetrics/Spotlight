@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   Card,
@@ -10,11 +11,24 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { getSuppliers, getPartnerOverview } from "@/lib/queries/partners";
+import { getSuppliers, getSuppliersForDistributor, getPartnerOverview } from "@/lib/queries/partners";
+import { getServerUser } from "@/lib/auth";
 
 export default async function SuppliersPage() {
+  const user = await getServerUser();
+
+  // Supplier users go directly to their own detail page
+  if (user?.role === "SUPPLIER" && user.supplierId) {
+    redirect(`/partners/suppliers/${user.supplierId}`);
+  }
+
+  // Distributors see only suppliers whose products flow through them
+  const isDistributor = user?.role === "DISTRIBUTOR" && user.distributorId;
+
   const [suppliers, overview] = await Promise.all([
-    getSuppliers(),
+    isDistributor
+      ? getSuppliersForDistributor(user.distributorId!)
+      : getSuppliers(),
     getPartnerOverview(),
   ]);
 
@@ -29,10 +43,12 @@ export default async function SuppliersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-[#06113e]">
-          Suppliers
+          {isDistributor ? "My Supplier Channels" : "Suppliers"}
         </h1>
         <p className="text-muted-foreground">
-          Supplier performance aggregated across all distributors.
+          {isDistributor
+            ? "Supplier performance for products distributed through your organization."
+            : "Supplier performance aggregated across all distributors."}
         </p>
       </div>
 

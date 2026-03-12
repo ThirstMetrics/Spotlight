@@ -12,9 +12,12 @@ interface LoginResponse {
     name: string;
     role: string;
     organizationId?: string;
+    organizationName?: string;
     outletIds?: string[];
     distributorId?: string;
+    distributorName?: string;
     supplierId?: string;
+    supplierName?: string;
   };
 }
 
@@ -76,6 +79,17 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse<L
     const distributorId = allAssignments.find((a) => a.distributorId)?.distributorId;
     const supplierId = allAssignments.find((a) => a.supplierId)?.supplierId;
 
+    // Look up entity names for display
+    const organizationName = organizationId
+      ? (await prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }))?.name
+      : undefined;
+    const distributorName = distributorId
+      ? (await prisma.distributor.findUnique({ where: { id: distributorId }, select: { name: true } }))?.name
+      : undefined;
+    const supplierName = supplierId
+      ? (await prisma.supplier.findUnique({ where: { id: supplierId }, select: { name: true } }))?.name
+      : undefined;
+
     // Sign JWT
     const secret = getJwtSecret();
     const token = await new SignJWT({
@@ -84,9 +98,12 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse<L
       name: user.name,
       role: roleName,
       organizationId,
+      organizationName: organizationName ?? undefined,
       outletIds: outletIds.length > 0 ? outletIds : undefined,
       distributorId,
+      distributorName: distributorName ?? undefined,
       supplierId,
+      supplierName: supplierName ?? undefined,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
@@ -107,9 +124,12 @@ export async function POST(request: Request): Promise<NextResponse<ApiResponse<L
         name: user.name,
         role: roleName,
         organizationId: organizationId ?? undefined,
+        organizationName: organizationName ?? undefined,
         outletIds: outletIds.length > 0 ? outletIds : undefined,
         distributorId: distributorId ?? undefined,
+        distributorName: distributorName ?? undefined,
         supplierId: supplierId ?? undefined,
+        supplierName: supplierName ?? undefined,
       },
     };
 

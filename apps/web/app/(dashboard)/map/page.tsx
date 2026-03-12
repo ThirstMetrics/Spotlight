@@ -7,8 +7,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import nextDynamic from "next/dynamic";
 import { getMapData } from "@/lib/queries/map";
-import OutletMap from "./OutletMap";
+
+const OutletMap = nextDynamic(() => import("./OutletMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[500px] items-center justify-center rounded-md border bg-gray-50">
+      <div className="text-center">
+        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-[#06113e]" />
+        <p className="text-sm text-muted-foreground">Loading map...</p>
+      </div>
+    </div>
+  ),
+});
 
 export default async function MapPage() {
   const { outlets, summary } = await getMapData();

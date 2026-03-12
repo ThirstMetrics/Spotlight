@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   Card,
@@ -11,8 +12,21 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getDistributors, getPartnerOverview } from "@/lib/queries/partners";
+import { getServerUser } from "@/lib/auth";
 
 export default async function DistributorsPage() {
+  const user = await getServerUser();
+
+  // Distributor users go directly to their own detail page
+  if (user?.role === "DISTRIBUTOR" && user.distributorId) {
+    redirect(`/partners/distributors/${user.distributorId}`);
+  }
+
+  // Suppliers shouldn't see the distributors list
+  if (user?.role === "SUPPLIER") {
+    redirect("/overview");
+  }
+
   const [distributors, overview] = await Promise.all([
     getDistributors(),
     getPartnerOverview(),

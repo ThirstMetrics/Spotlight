@@ -11,10 +11,18 @@
 
 import { prisma } from "@spotlight/db";
 
-export async function getSupplierDetail(supplierId: string) {
+export async function getSupplierDetail(supplierId: string, scopeDistributorId?: string) {
   const now = new Date();
   const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
   const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+
+  // When a distributor is viewing, scope all queries to their products/orders only
+  const dpWhere = scopeDistributorId
+    ? { supplierId, distributorId: scopeDistributorId, isActive: true as const }
+    : { supplierId, isActive: true as const };
+  const orderWhere = scopeDistributorId
+    ? { supplierId, distributorId: scopeDistributorId }
+    : { supplierId };
 
   // Parallel fetch all data
   const [
@@ -38,30 +46,24 @@ export async function getSupplierDetail(supplierId: string) {
       select: { id: true, name: true, contactName: true, contactEmail: true, contactPhone: true, website: true },
     }),
 
-    // Total active products for this supplier (across all distributors)
-    prisma.distributorProduct.count({
-      where: { supplierId, isActive: true },
-    }),
+    // Total active products for this supplier (scoped if distributor)
+    prisma.distributorProduct.count({ where: dpWhere }),
 
     // Wine products count
     prisma.distributorProduct.count({
-      where: {
-        supplierId,
-        isActive: true,
-        product: { category: "WINE" },
-      },
+      where: { ...dpWhere, product: { category: "WINE" } },
     }),
 
     // Distinct distributors carrying this supplier's products
     prisma.distributorProduct.findMany({
-      where: { supplierId, isActive: true },
+      where: dpWhere,
       select: { distributorId: true },
       distinct: ["distributorId"],
     }),
 
     // Distinct outlets served (12 months)
     prisma.orderHistory.findMany({
-      where: { supplierId, orderDate: { gte: twelveMonthsAgo } },
+      where: { ...orderWhere, orderDate: { gte: twelveMonthsAgo } },
       select: { outletId: true },
       distinct: ["outletId"],
     }),
@@ -69,33 +71,33 @@ export async function getSupplierDetail(supplierId: string) {
     // 12-month volume
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true, quantity: true },
-      where: { supplierId, orderDate: { gte: twelveMonthsAgo } },
+      where: { ...orderWhere, orderDate: { gte: twelveMonthsAgo } },
     }),
 
     // Recent 6-month volume (for YoY)
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { supplierId, orderDate: { gte: sixMonthsAgo } },
+      where: { ...orderWhere, orderDate: { gte: sixMonthsAgo } },
     }),
 
     // Prior 6-month volume (for YoY)
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
       where: {
-        supplierId,
+        ...orderWhere,
         orderDate: { gte: twelveMonthsAgo, lt: sixMonthsAgo },
       },
     }),
 
-    // All suppliers' 12-month volume (for revenue share)
+    // All suppliers' 12-month volume (for revenue share — always unscoped)
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
       where: { orderDate: { gte: twelveMonthsAgo } },
     }),
 
-    // All orders for this supplier (12 months) — for trends, outlet perf, product perf
+    // All orders for this supplier (12 months) — scoped if distributor
     prisma.orderHistory.findMany({
-      where: { supplierId, orderDate: { gte: twelveMonthsAgo } },
+      where: { ...orderWhere, orderDate: { gte: twelveMonthsAgo } },
       select: {
         productId: true,
         outletId: true,
@@ -107,9 +109,9 @@ export async function getSupplierDetail(supplierId: string) {
       },
     }),
 
-    // All products for this supplier (across all distributors)
+    // All products for this supplier (scoped if distributor)
     prisma.distributorProduct.findMany({
-      where: { supplierId, isActive: true },
+      where: dpWhere,
       include: {
         product: {
           select: { id: true, name: true, sku: true, category: true, subcategory: true, size: true, unit: true },

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -15,6 +15,7 @@ import { VolumeChart } from "@/components/dashboard/VolumeChart";
 import { CategoryPieChart } from "@/components/dashboard/OutletDetailCharts";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getDistributorDetail } from "@/lib/queries/distributor-detail";
+import { getServerUser } from "@/lib/auth";
 import { DistributorTabs } from "./DistributorTabs";
 
 interface DistributorDetailPageProps {
@@ -24,6 +25,18 @@ interface DistributorDetailPageProps {
 export default async function DistributorDetailPage({
   params,
 }: DistributorDetailPageProps) {
+  const user = await getServerUser();
+
+  // Distributor users can only view their own detail page
+  if (user?.role === "DISTRIBUTOR" && user.distributorId && user.distributorId !== params.id) {
+    redirect(`/partners/distributors/${user.distributorId}`);
+  }
+
+  // Supplier users cannot access distributor details
+  if (user?.role === "SUPPLIER") {
+    redirect("/overview");
+  }
+
   const data = await getDistributorDetail(params.id);
   if (!data) notFound();
 
@@ -167,6 +180,7 @@ export default async function DistributorDetailPage({
 
       {/* Interactive Tables */}
       <DistributorTabs
+        distributorName={distributor.name}
         outletPerformance={serializedOutlets}
         productPerformance={serializedProducts}
         winePortfolio={winePortfolio}

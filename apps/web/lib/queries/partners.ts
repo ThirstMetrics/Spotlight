@@ -137,6 +137,82 @@ export async function getSuppliers() {
 }
 
 /**
+ * Get supplier metrics scoped to a single distributor.
+ * A distributor only sees suppliers whose products flow through their distribution.
+ */
+export async function getSuppliersForDistributor(distributorId: string) {
+  const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  // Only suppliers that this distributor carries
+  const supplierProducts = await prisma.distributorProduct.findMany({
+    where: { distributorId, isActive: true },
+    select: {
+      supplierId: true,
+      product: { select: { id: true, name: true, category: true } },
+      supplier: { select: { id: true, name: true, contactName: true, website: true } },
+    },
+  });
+
+  // Group by supplier
+  const supplierMap = new Map<string, {
+    supplier: { id: string; name: string; contactName: string | null; website: string | null };
+    productNames: string[];
+    productIds: string[];
+  }>();
+  for (const sp of supplierProducts) {
+    if (!supplierMap.has(sp.supplierId)) {
+      supplierMap.set(sp.supplierId, {
+        supplier: sp.supplier,
+        productNames: [],
+        productIds: [],
+      });
+    }
+    const entry = supplierMap.get(sp.supplierId)!;
+    entry.productNames.push(sp.product.name);
+    entry.productIds.push(sp.product.id);
+  }
+
+  const results = await Promise.all(
+    [...supplierMap.entries()].map(async ([supplierId, { supplier, productNames, productIds }]) => {
+      // Volume for this supplier through THIS distributor only
+      const volumeAgg = await prisma.orderHistory.aggregate({
+        _sum: { totalCost: true },
+        where: {
+          distributorId,
+          supplierId,
+          orderDate: { gte: threeMonthsAgo },
+        },
+      });
+
+      // Outlets reached through this distributor for this supplier
+      const outlets = await prisma.orderHistory.findMany({
+        where: {
+          distributorId,
+          supplierId,
+          orderDate: { gte: threeMonthsAgo },
+        },
+        select: { outletId: true },
+        distinct: ["outletId"],
+      });
+
+      return {
+        id: supplier.id,
+        name: supplier.name,
+        contactName: supplier.contactName,
+        website: supplier.website,
+        productCount: productNames.length,
+        topProducts: productNames.slice(0, 3),
+        distributorCount: 1, // Scoped to this distributor
+        volume: volumeAgg._sum.totalCost ?? 0,
+        outletCount: outlets.length,
+      };
+    })
+  );
+
+  return results.sort((a, b) => b.volume - a.volume);
+}
+
+/**
  * Get high-level partner metrics for the dashboard metric cards.
  */
 export async function getPartnerOverview() {

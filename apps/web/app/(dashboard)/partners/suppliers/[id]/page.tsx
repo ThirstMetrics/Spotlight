@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -15,6 +15,7 @@ import { VolumeChart } from "@/components/dashboard/VolumeChart";
 import { CategoryPieChart } from "@/components/dashboard/OutletDetailCharts";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getSupplierDetail } from "@/lib/queries/supplier-detail";
+import { getServerUser } from "@/lib/auth";
 import { SupplierTabs } from "./SupplierTabs";
 
 interface SupplierDetailPageProps {
@@ -24,7 +25,16 @@ interface SupplierDetailPageProps {
 export default async function SupplierDetailPage({
   params,
 }: SupplierDetailPageProps) {
-  const data = await getSupplierDetail(params.id);
+  const user = await getServerUser();
+
+  // Supplier users can only view their own detail page
+  if (user?.role === "SUPPLIER" && user.supplierId && user.supplierId !== params.id) {
+    redirect(`/partners/suppliers/${user.supplierId}`);
+  }
+
+  // Distributors only see this supplier's products that flow through their distribution
+  const scopeDistributorId = user?.role === "DISTRIBUTOR" ? user.distributorId : undefined;
+  const data = await getSupplierDetail(params.id, scopeDistributorId);
   if (!data) notFound();
 
   const { supplier, metrics, volumeTrend, categoryBreakdown, distributorPartners, outletPerformance, productPerformance, winePortfolio } = data;

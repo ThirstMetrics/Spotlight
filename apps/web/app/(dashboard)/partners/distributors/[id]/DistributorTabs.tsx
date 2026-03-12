@@ -54,6 +54,7 @@ interface WineRow {
 }
 
 interface DistributorTabsProps {
+  distributorName: string;
   outletPerformance: OutletRow[];
   productPerformance: ProductRow[];
   winePortfolio: WineRow[];
@@ -348,14 +349,250 @@ function WinePortfolio({ data }: { data: WineRow[] }) {
   );
 }
 
+// === RWLV Item Add Form (matches Resorts World Las Vegas setup spreadsheet) ===
+
+interface RwlvSetupItem {
+  id: number;
+  rwlvDescription: string;
+  category: string;
+  vendor: string;
+  vendorProductNum: string;
+  vendorDescription: string;
+  vendorPack: string;
+  mfg: string;
+  mfgNum: string;
+  storageType: string;
+  caseSplittable: string;
+  stockedStatus: string;
+  leadTime: string;
+  vendorCost: string;
+  canSplitCase: string;
+  orderBy: string;
+  priceBy: string;
+  status: "draft" | "submitted";
+}
+
+const EMPTY_SETUP_ITEM = {
+  rwlvDescription: "",
+  category: "",
+  vendor: "",
+  vendorProductNum: "",
+  vendorDescription: "",
+  vendorPack: "",
+  mfg: "",
+  mfgNum: "",
+  storageType: "Shelf-stable",
+  caseSplittable: "Yes",
+  stockedStatus: "Stocked",
+  leadTime: "Stocked",
+  vendorCost: "",
+  canSplitCase: "Yes",
+  orderBy: "case",
+  priceBy: "case",
+};
+
+function NewItemSetup({ distributorName }: { distributorName: string }) {
+  const [items, setItems] = useState<RwlvSetupItem[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_SETUP_ITEM, vendor: distributorName });
+
+  const handleSubmit = () => {
+    if (!form.rwlvDescription.trim()) return;
+    setItems((prev) => [
+      ...prev,
+      { ...form, id: Date.now(), status: "submitted" as const },
+    ]);
+    setForm({ ...EMPTY_SETUP_ITEM, vendor: distributorName });
+    setShowForm(false);
+  };
+
+  const F = ({ label, value, field, placeholder, span }: { label: string; value: string; field: string; placeholder?: string; span?: number }) => (
+    <div className={span ? `sm:col-span-${span}` : ""}>
+      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">{label}</label>
+      <Input
+        value={value}
+        onChange={(e) => setForm({ ...form, [field]: e.target.value })}
+        placeholder={placeholder}
+        className="mt-0.5 text-sm h-8"
+      />
+    </div>
+  );
+
+  const Sel = ({ label, value, field, options }: { label: string; value: string; field: string; options: string[] }) => (
+    <div>
+      <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => setForm({ ...form, [field]: e.target.value })}
+        className="mt-0.5 w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm h-8"
+      >
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">RWLV Item Add Form</CardTitle>
+            <CardDescription>
+              Submit new items using the Resorts World Las Vegas setup format. Items flow to the director&apos;s pending approval workflow.
+            </CardDescription>
+          </div>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="px-4 py-2 text-sm font-medium text-white rounded-md"
+            style={{ backgroundColor: "#5ad196" }}
+          >
+            + Add Item
+          </button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {showForm && (
+          <div className="mb-6 rounded-lg border border-[#06113e]/20 bg-gray-50/50 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <h4 className="text-sm font-semibold text-[#06113e]">New Item Setup</h4>
+              <Badge variant="secondary" className="text-[10px]">RWLV Format</Badge>
+            </div>
+            <div className="grid gap-x-3 gap-y-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="col-span-2">
+                <F label="RWLV Product Description *" value={form.rwlvDescription} field="rwlvDescription" placeholder="e.g., Opus One 2021 750ML/6" />
+              </div>
+              <F label="Category" value={form.category} field="category" placeholder="e.g., CALIFORNIA Red" />
+              <F label="Vendor" value={form.vendor} field="vendor" placeholder={distributorName} />
+              <F label="Vendor Product #" value={form.vendorProductNum} field="vendorProductNum" placeholder="e.g., 10119" />
+              <div className="col-span-2">
+                <F label="Vendor Description" value={form.vendorDescription} field="vendorDescription" placeholder="e.g., Opus One 2021 6/750ml" />
+              </div>
+              <F label="Vendor Pack" value={form.vendorPack} field="vendorPack" placeholder="e.g., 6" />
+              <F label="MFG (Manufacturer)" value={form.mfg} field="mfg" placeholder="e.g., Opus One Winery" />
+              <F label="MFG #" value={form.mfgNum} field="mfgNum" placeholder="" />
+              <Sel label="Storage Type" value={form.storageType} field="storageType" options={["Shelf-stable", "Refrigerated", "Frozen"]} />
+              <Sel label="Is Master Case Split-able?" value={form.caseSplittable} field="caseSplittable" options={["Yes", "No"]} />
+              <Sel label="Stocked or Non-stocked" value={form.stockedStatus} field="stockedStatus" options={["Stocked", "Non-stocked"]} />
+              <F label="Lead Time (if not stocked)" value={form.leadTime} field="leadTime" placeholder="e.g., 3 business days" />
+              <F label="Vendor Current Cost ($)" value={form.vendorCost} field="vendorCost" placeholder="Case cost" />
+              <Sel label="Can You Split a Case?" value={form.canSplitCase} field="canSplitCase" options={["Yes", "No"]} />
+              <Sel label="Order By" value={form.orderBy} field="orderBy" options={["case", "each", "keg"]} />
+              <Sel label="Price By" value={form.priceBy} field="priceBy" options={["case", "each", "keg"]} />
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleSubmit}
+                className="px-4 py-2 text-sm font-medium text-white rounded-md bg-[#06113e] hover:bg-[#06113e]/90"
+              >
+                Submit for Review
+              </button>
+              <button
+                onClick={() => setShowForm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 rounded-md border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Submitted items table — matches RWLV spreadsheet columns */}
+        {items.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-gray-50/50">
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">RWLV Description</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Category</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Vendor</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Vendor #</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Pack</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">MFG</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Storage</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Stocked</th>
+                  <th className="px-2 py-2 text-right font-medium text-gray-600">Cost</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Split?</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-b hover:bg-gray-50/30">
+                    <td className="px-2 py-2 font-medium text-[#06113e] max-w-[200px] truncate">{item.rwlvDescription}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{item.category || "—"}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{item.vendor}</td>
+                    <td className="px-2 py-2 font-mono text-muted-foreground">{item.vendorProductNum || "—"}</td>
+                    <td className="px-2 py-2">{item.vendorPack || "—"}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{item.mfg || "—"}</td>
+                    <td className="px-2 py-2">{item.storageType}</td>
+                    <td className="px-2 py-2">{item.stockedStatus}</td>
+                    <td className="px-2 py-2 text-right font-medium">{item.vendorCost ? `$${item.vendorCost}` : "—"}</td>
+                    <td className="px-2 py-2">{item.canSplitCase}</td>
+                    <td className="px-2 py-2">
+                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 text-[10px]">
+                        Pending Review
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          !showForm && (
+            <div className="py-12 text-center">
+              <p className="text-sm text-muted-foreground mb-1">No new items submitted</p>
+              <p className="text-xs text-muted-foreground">
+                Click &ldquo;+ Add Item&rdquo; to submit a product setup for Resorts World approval.
+              </p>
+            </div>
+          )
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // === Main Export ===
 
-export function DistributorTabs({ outletPerformance, productPerformance, winePortfolio }: DistributorTabsProps) {
+export function DistributorTabs({ distributorName, outletPerformance, productPerformance, winePortfolio }: DistributorTabsProps) {
+  const [activeView, setActiveView] = useState<"current" | "new-items">("current");
+
   return (
     <div className="space-y-6">
-      <OutletTable data={outletPerformance} />
-      <ProductTable data={productPerformance} />
-      <WinePortfolio data={winePortfolio} />
+      {/* Top-level tab switcher */}
+      <div className="flex gap-1 border-b">
+        <button
+          onClick={() => setActiveView("current")}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeView === "current"
+              ? "border-[#06113e] text-[#06113e]"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Current Products
+        </button>
+        <button
+          onClick={() => setActiveView("new-items")}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeView === "new-items"
+              ? "border-[#06113e] text-[#06113e]"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          New Item Setup
+        </button>
+      </div>
+
+      {activeView === "current" ? (
+        <>
+          <OutletTable data={outletPerformance} />
+          <ProductTable data={productPerformance} />
+          <WinePortfolio data={winePortfolio} />
+        </>
+      ) : (
+        <NewItemSetup distributorName={distributorName} />
+      )}
     </div>
   );
 }

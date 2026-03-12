@@ -43,23 +43,47 @@ export async function getMapData() {
     where: { isActive: true },
   });
 
-  // Approximate positions within Resorts World Las Vegas complex
-  // Center: 36.1372, -115.1689
-  // Small offsets to spread outlets around the property footprint
+  // Positions within Resorts World Las Vegas (3000 S Las Vegas Blvd)
+  // Building center per Google Maps: 36.1341, -115.1677
+  // Las Vegas Blvd (Strip) runs N-S on the EAST side of the property
+  // Podium footprint ~36.1328–36.1355 lat, ~-115.1660–-115.1695 lng
+  // Towers: Hilton (south), Conrad (center), Crockfords (north)
+  // The District: dining corridor along east/Strip side
+  // Famous Foods: east side with Strip-facing windows
+  // Pool deck: elevated, south side of podium
   const outletPositions: Record<string, [number, number]> = {
-    "carversteak": [36.1378, -115.1695],
-    "crossroads-kitchen": [36.1375, -115.1685],
-    "wallys-wine-spirits": [36.1370, -115.1680],
-    "bar-zazu": [36.1368, -115.1692],
-    "redtail": [36.1382, -115.1688],
-    "famous-foods-street-eats": [36.1365, -115.1690],
-    "dawg-house-saloon": [36.1372, -115.1698],
-    "alle-lounge-on-66": [36.1380, -115.1682],
-    "gatsbys-cocktail-lounge": [36.1374, -115.1694],
-    "pool-bar-grill": [36.1366, -115.1686],
+    // Fine Dining — The District & resort level
+    "stubborn-seed":      [36.13500, -115.16640],  // North end of The District, near Conrad porte-cochere
+    "crossroads-kitchen": [36.13470, -115.16650],  // The District, east side near Strip
+    "genting-palace":     [36.13430, -115.16680],  // Central, resort level
+    "fuhu":               [36.13460, -115.16700],  // Central, resort level
+    "kusa-nori":          [36.13440, -115.16650],  // The District, east side
+    "wallys":             [36.13410, -115.16660],  // Heart of resort, just off casino floor
+    "viva":               [36.13380, -115.16690],  // South-central, resort level
+    "juniors":            [36.13360, -115.16670],  // South-central, casual dining
+
+    // Food Hall & Casual — casino level, east side
+    "famous-foods":       [36.13370, -115.16620],  // East side, Strip-facing windows
+    "dawg-house":         [36.13340, -115.16750],  // Entertainment area, west side
+
+    // Bars & Lounges — casino floor
+    "alle-lounge":        [36.13420, -115.16770],  // 66th floor Conrad tower (tower footprint)
+    "gatsbys":            [36.13450, -115.16730],  // Just off casino floor, wraparound views
+    "crystal-bar":        [36.13490, -115.16720],  // Crockfords casino floor, north-central
+    "golden-monkey":      [36.13400, -115.16730],  // Casino floor, central
+    "high-limit-bar":     [36.13420, -115.16740],  // High-limit gaming area, central
+    "here-kitty-kitty":   [36.13375, -115.16630],  // Hidden inside Famous Foods (east side)
+
+    // Lobby Bars — tower lobbies
+    "conrad-lobby":       [36.13480, -115.16670],  // Conrad tower lobby, east side
+    "crockfords-lobby":   [36.13520, -115.16710],  // Crockfords lobby, north end
+
+    // Pool & Nightlife — south side of podium
+    "pool-bar":           [36.13310, -115.16720],  // Pool deck, south side
+    "zouk":               [36.13320, -115.16780],  // Nightclub, south-west entertainment area
   };
 
-  const defaultPosition: [number, number] = [36.1372, -115.1689];
+  const defaultPosition: [number, number] = [36.1341, -115.1677];
 
   return {
     outlets: outlets.map((o) => ({
