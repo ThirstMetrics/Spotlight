@@ -25,11 +25,16 @@ export default async function SuppliersPage() {
   // Distributors see only suppliers whose products flow through them
   const isDistributor = user?.role === "DISTRIBUTOR" && user.distributorId;
 
+  // Internal users see data scoped to their org; partner users see cross-org data.
+  const orgScope = (user?.role === 'DISTRIBUTOR' || user?.role === 'SUPPLIER')
+    ? undefined
+    : user?.organizationId;
+
   const [suppliers, overview] = await Promise.all([
     isDistributor
       ? getSuppliersForDistributor(user.distributorId!)
-      : getSuppliers(),
-    getPartnerOverview(),
+      : getSuppliers(orgScope),
+    getPartnerOverview(orgScope),
   ]);
 
   const formatCurrency = (n: number) =>

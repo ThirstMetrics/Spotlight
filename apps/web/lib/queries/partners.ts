@@ -3,9 +3,11 @@ import { prisma } from "@spotlight/db";
 /**
  * Get distributor metrics and details for the partner dashboard.
  */
-export async function getDistributors() {
+export async function getDistributors(organizationId?: string) {
   const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
 
   const distributors = await prisma.distributor.findMany({
     where: { isActive: true },
@@ -31,6 +33,7 @@ export async function getDistributors() {
         where: {
           distributorId: dist.id,
           orderDate: { gte: threeMonthsAgo },
+          ...orgFilter,
         },
       });
 
@@ -40,6 +43,7 @@ export async function getDistributors() {
         where: {
           distributorId: dist.id,
           orderDate: { gte: sixMonthsAgo, lt: threeMonthsAgo },
+          ...orgFilter,
         },
       });
 
@@ -51,7 +55,7 @@ export async function getDistributors() {
 
       // Count outlets served
       const outletCount = await prisma.orderHistory.findMany({
-        where: { distributorId: dist.id, orderDate: { gte: threeMonthsAgo } },
+        where: { distributorId: dist.id, orderDate: { gte: threeMonthsAgo }, ...orgFilter },
         select: { outletId: true },
         distinct: ["outletId"],
       });
@@ -75,8 +79,10 @@ export async function getDistributors() {
 /**
  * Get supplier metrics and details for the partner dashboard.
  */
-export async function getSuppliers() {
+export async function getSuppliers(organizationId?: string) {
   const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
 
   const suppliers = await prisma.supplier.findMany({
     where: { isActive: true },
@@ -109,12 +115,13 @@ export async function getSuppliers() {
         where: {
           supplierId: sup.id,
           orderDate: { gte: threeMonthsAgo },
+          ...orgFilter,
         },
       });
 
       // Count outlets this supplier reaches
       const outlets = await prisma.orderHistory.findMany({
-        where: { supplierId: sup.id, orderDate: { gte: threeMonthsAgo } },
+        where: { supplierId: sup.id, orderDate: { gte: threeMonthsAgo }, ...orgFilter },
         select: { outletId: true },
         distinct: ["outletId"],
       });
@@ -215,9 +222,11 @@ export async function getSuppliersForDistributor(distributorId: string) {
 /**
  * Get high-level partner metrics for the dashboard metric cards.
  */
-export async function getPartnerOverview() {
+export async function getPartnerOverview(organizationId?: string) {
   const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
 
   const [distributorCount, supplierCount, currentVolume, previousVolume, totalProducts] =
     await Promise.all([
@@ -225,11 +234,11 @@ export async function getPartnerOverview() {
       prisma.supplier.count({ where: { isActive: true } }),
       prisma.orderHistory.aggregate({
         _sum: { totalCost: true },
-        where: { orderDate: { gte: threeMonthsAgo } },
+        where: { orderDate: { gte: threeMonthsAgo }, ...orgFilter },
       }),
       prisma.orderHistory.aggregate({
         _sum: { totalCost: true },
-        where: { orderDate: { gte: sixMonthsAgo, lt: threeMonthsAgo } },
+        where: { orderDate: { gte: sixMonthsAgo, lt: threeMonthsAgo }, ...orgFilter },
       }),
       prisma.distributorProduct.count({ where: { isActive: true } }),
     ]);

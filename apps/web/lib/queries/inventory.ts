@@ -3,11 +3,12 @@ import { prisma } from "@spotlight/db";
 /**
  * Get inventory overview metrics for the dashboard.
  */
-export async function getInventoryOverview() {
+export async function getInventoryOverview(organizationId?: string) {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
   // Get latest snapshots per outlet/product
   const snapshots = await prisma.inventorySnapshot.findMany({
+    where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
     orderBy: { snapshotDate: "desc" },
     distinct: ["outletId", "productId"],
     select: {
@@ -26,7 +27,10 @@ export async function getInventoryOverview() {
   const transferAgg = await prisma.warehouseTransfer.aggregate({
     _sum: { quantity: true, totalCost: true },
     _count: true,
-    where: { transferDate: { gte: ninetyDaysAgo } },
+    where: {
+      transferDate: { gte: ninetyDaysAgo },
+      ...(organizationId ? { outlet: { organizationId } } : {}),
+    },
   });
 
   return {
@@ -42,11 +46,12 @@ export async function getInventoryOverview() {
 /**
  * Get inventory items with days-of-hand calculations.
  */
-export async function getInventoryItems() {
+export async function getInventoryItems(organizationId?: string) {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
   // Get latest snapshot per outlet/product
   const snapshots = await prisma.inventorySnapshot.findMany({
+    where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
     orderBy: { snapshotDate: "desc" },
     distinct: ["outletId", "productId"],
     include: {
@@ -98,7 +103,7 @@ export async function getInventoryItems() {
 /**
  * Get recent alerts related to inventory.
  */
-export async function getInventoryAlerts() {
+export async function getInventoryAlerts(organizationId?: string) {
   return prisma.alert.findMany({
     where: {
       alertType: {
@@ -110,6 +115,7 @@ export async function getInventoryAlerts() {
         ],
       },
       isDismissed: false,
+      ...(organizationId ? { outlet: { organizationId } } : {}),
     },
     include: {
       outlet: { select: { name: true, slug: true } },

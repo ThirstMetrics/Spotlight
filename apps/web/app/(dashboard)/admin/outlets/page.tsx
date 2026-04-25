@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminOutlets, getOutletGroupOptions } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { OutletTable } from "./OutletTable";
@@ -8,9 +9,11 @@ import { OutletForm } from "./OutletForm";
 import { Store, CheckCircle, XCircle, Layers } from "lucide-react";
 
 export default async function AdminOutletsPage() {
+  const user = await getServerUser();
+  const orgId = user?.organizationId;
   const [outlets, groups] = await Promise.all([
-    getAdminOutlets(),
-    getOutletGroupOptions(),
+    getAdminOutlets(orgId),
+    getOutletGroupOptions(orgId),
   ]);
 
   const totalOutlets = outlets.length;

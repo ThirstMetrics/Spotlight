@@ -16,13 +16,15 @@ import {
   getCategoryMargins,
   getMarginByOutlet,
 } from "@/lib/queries/margins";
+import { getServerUser } from "@/lib/auth";
 
 export default async function MarginsPage() {
+  const user = await getServerUser();
   const [metrics, trendData, categoryData, outletData] = await Promise.all([
-    getMarginMetrics(),
-    getMonthlyMarginTrend(),
-    getCategoryMargins(),
-    getMarginByOutlet(),
+    getMarginMetrics(user?.organizationId),
+    getMonthlyMarginTrend(user?.organizationId),
+    getCategoryMargins(user?.organizationId),
+    getMarginByOutlet(user?.organizationId),
   ]);
 
   const formatCurrency = (n: number) =>

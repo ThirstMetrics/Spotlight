@@ -10,12 +10,14 @@ import {
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getAdminFieldMappings } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { FieldMappingTable } from "./FieldMappingTable";
 import { FieldMappingDialog } from "./FieldMappingDialog";
 import { Tag, Database, ArrowUpDown, CheckCircle2 } from "lucide-react";
 
 export default async function FieldMappingsPage() {
-  const mappings = await getAdminFieldMappings();
+  const user = await getServerUser();
+  const mappings = await getAdminFieldMappings(user?.organizationId);
 
   // Serialize dates — these will be passed to a client component
   const serialized = mappings.map((m) => ({

@@ -13,12 +13,16 @@ import {
   getRecentSessions,
   getTopPages,
 } from "@/lib/queries/analytics";
+import { getServerUser } from "@/lib/auth";
 
 export default async function AnalyticsPage() {
+  const user = await getServerUser();
+  const organizationId = user?.organizationId;
+
   const [overview, sessions, topPages] = await Promise.all([
-    getAnalyticsOverview(),
-    getRecentSessions(),
-    getTopPages(),
+    getAnalyticsOverview(organizationId),
+    getRecentSessions(20, organizationId),
+    getTopPages(10, organizationId),
   ]);
 
   return (

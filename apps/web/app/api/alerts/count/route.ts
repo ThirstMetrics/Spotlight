@@ -15,6 +15,6 @@ export async function GET(request: Request) {
     );
   }
 
-  const count = await getUnreadAlertCount();
+  const count = await getUnreadAlertCount({ organizationId: user.organizationId });
   return NextResponse.json({ success: true, data: { count } });
 }

@@ -9,12 +9,16 @@ import {
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getAlerts, getAlertStats } from "@/lib/queries/alerts";
+import { getServerUser } from "@/lib/auth";
 import { AlertFeed } from "./AlertFeed";
 
 export default async function AlertFeedPage() {
+  const user = await getServerUser();
+  const organizationId = user?.organizationId;
+
   const [alerts, stats] = await Promise.all([
-    getAlerts(),
-    getAlertStats(),
+    getAlerts({ organizationId }),
+    getAlertStats({ organizationId }),
   ]);
 
   return (

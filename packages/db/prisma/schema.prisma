@@ -88,6 +88,13 @@ enum TrackingNumberType {
   OTHER
 }
 
+enum SetupRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_INFO
+}
+
 // ============================================================================
 // ORGANIZATION & ACCESS
 // ============================================================================
@@ -225,6 +232,8 @@ model User {
   fieldMappingProfiles FieldMappingProfile[] @relation("MappingCreator")
   portalSessions     PortalSession[]
   portalInteractions PortalInteraction[]
+  setupRequestsSubmitted ItemSetupRequest[] @relation("SetupSubmitter")
+  setupRequestsReviewed  ItemSetupRequest[] @relation("SetupReviewer")
 
   @@map("users")
 }
@@ -311,6 +320,7 @@ model Distributor {
   orderHistory        OrderHistory[]
   alerts              Alert[]
   userRoles           UserRoleAssignment[]
+  itemSetupRequests   ItemSetupRequest[]
 
   @@map("distributors")
 }
@@ -785,4 +795,47 @@ model FieldMappingProfile {
 
   @@unique([organizationId, source, uploadType, name])
   @@map("field_mapping_profiles")
+}
+
+// ============================================================================
+// ITEM SETUP REQUESTS (Distributor → Director workflow)
+// ============================================================================
+
+model ItemSetupRequest {
+  id                 String              @id @default(cuid())
+  distributorId      String              @map("distributor_id")
+  submittedBy        String              @map("submitted_by")
+
+  // RWLV Item Add Form fields
+  rwlvDescription    String              @map("rwlv_description")
+  category           String              @default("")
+  vendor             String              @default("")
+  vendorProductNum   String              @default("") @map("vendor_product_num")
+  vendorDescription  String              @default("") @map("vendor_description")
+  vendorPack         String              @default("") @map("vendor_pack")
+  mfg                String              @default("")
+  mfgNum             String              @default("") @map("mfg_num")
+  storageType        String              @default("Shelf-stable") @map("storage_type")
+  caseSplittable     String              @default("Yes") @map("case_splittable")
+  stockedStatus      String              @default("Stocked") @map("stocked_status")
+  leadTime           String              @default("Stocked") @map("lead_time")
+  vendorCost         String              @default("") @map("vendor_cost")
+  canSplitCase       String              @default("Yes") @map("can_split_case")
+  orderBy            String              @default("case") @map("order_by")
+  priceBy            String              @default("case") @map("price_by")
+
+  // Workflow fields
+  status             SetupRequestStatus  @default(PENDING)
+  reviewedBy         String?             @map("reviewed_by")
+  reviewNote         String?             @map("review_note")
+  approvedProductId  String?             @map("approved_product_id")
+
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  distributor  Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  submitter    User        @relation("SetupSubmitter", fields: [submittedBy], references: [id])
+  reviewer     User?       @relation("SetupReviewer", fields: [reviewedBy], references: [id])
+
+  @@map("item_setup_requests")
 }

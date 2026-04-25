@@ -6,9 +6,10 @@
 import { prisma } from "@spotlight/db";
 
 /** Get recipe overview stats */
-export async function getRecipeOverview() {
+export async function getRecipeOverview(options?: { organizationId?: string }) {
+  const { organizationId } = options ?? {};
   const recipes = await prisma.recipe.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
     include: {
       ingredients: {
         include: {
@@ -61,9 +62,10 @@ export async function getRecipeOverview() {
 }
 
 /** Get all recipes with calculated costs and margins */
-export async function getRecipeList() {
+export async function getRecipeList(options?: { organizationId?: string }) {
+  const { organizationId } = options ?? {};
   const recipes = await prisma.recipe.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
     include: {
       outlet: { select: { name: true } },
       ingredients: {

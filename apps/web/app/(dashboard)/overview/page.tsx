@@ -37,12 +37,12 @@ export default async function OverviewPage() {
 
   const [metrics, volumeData, topProducts, alerts, costGoal, yoy] =
     await Promise.all([
-      getOverviewMetrics(),
-      getVolumeByMonth(),
-      getTopProducts(8),
-      getRecentAlerts(5),
-      getCostVsGoalByOutlet(),
-      getYoYComparison(),
+      getOverviewMetrics(user?.organizationId),
+      getVolumeByMonth(user?.organizationId),
+      getTopProducts(8, user?.organizationId),
+      getRecentAlerts(5, user?.organizationId),
+      getCostVsGoalByOutlet(user?.organizationId),
+      getYoYComparison(user?.organizationId),
     ]);
 
   const formatCurrency = (n: number) =>

@@ -11,18 +11,20 @@
 
 import { prisma } from "@spotlight/db";
 
-export async function getSupplierDetail(supplierId: string, scopeDistributorId?: string) {
+export async function getSupplierDetail(supplierId: string, scopeDistributorId?: string, organizationId?: string) {
   const now = new Date();
   const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
   const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
 
   // When a distributor is viewing, scope all queries to their products/orders only
   const dpWhere = scopeDistributorId
     ? { supplierId, distributorId: scopeDistributorId, isActive: true as const }
     : { supplierId, isActive: true as const };
   const orderWhere = scopeDistributorId
-    ? { supplierId, distributorId: scopeDistributorId }
-    : { supplierId };
+    ? { supplierId, distributorId: scopeDistributorId, ...orgFilter }
+    : { supplierId, ...orgFilter };
 
   // Parallel fetch all data
   const [
@@ -89,10 +91,10 @@ export async function getSupplierDetail(supplierId: string, scopeDistributorId?:
       },
     }),
 
-    // All suppliers' 12-month volume (for revenue share — always unscoped)
+    // All suppliers' 12-month volume (for revenue share — scoped to org)
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { orderDate: { gte: twelveMonthsAgo } },
+      where: { orderDate: { gte: twelveMonthsAgo }, ...orgFilter },
     }),
 
     // All orders for this supplier (12 months) — scoped if distributor
@@ -122,7 +124,7 @@ export async function getSupplierDetail(supplierId: string, scopeDistributorId?:
 
     // All outlets
     prisma.outlet.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
       select: { id: true, name: true, slug: true, type: true },
     }),
 

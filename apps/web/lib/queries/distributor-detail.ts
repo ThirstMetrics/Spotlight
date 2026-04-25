@@ -14,10 +14,12 @@ export async function getDistributorById(distributorId: string) {
   });
 }
 
-export async function getDistributorDetail(distributorId: string) {
+export async function getDistributorDetail(distributorId: string, organizationId?: string) {
   const now = new Date();
   const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
   const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
 
   // Parallel fetch all data
   const [
@@ -55,7 +57,7 @@ export async function getDistributorDetail(distributorId: string) {
 
     // Distinct outlets served (12 months)
     prisma.orderHistory.findMany({
-      where: { distributorId, orderDate: { gte: twelveMonthsAgo } },
+      where: { distributorId, orderDate: { gte: twelveMonthsAgo }, ...orgFilter },
       select: { outletId: true },
       distinct: ["outletId"],
     }),
@@ -63,13 +65,13 @@ export async function getDistributorDetail(distributorId: string) {
     // 12-month volume
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true, quantity: true },
-      where: { distributorId, orderDate: { gte: twelveMonthsAgo } },
+      where: { distributorId, orderDate: { gte: twelveMonthsAgo }, ...orgFilter },
     }),
 
     // Recent 6-month volume (for YoY)
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { distributorId, orderDate: { gte: sixMonthsAgo } },
+      where: { distributorId, orderDate: { gte: sixMonthsAgo }, ...orgFilter },
     }),
 
     // Prior 6-month volume (for YoY)
@@ -78,18 +80,19 @@ export async function getDistributorDetail(distributorId: string) {
       where: {
         distributorId,
         orderDate: { gte: twelveMonthsAgo, lt: sixMonthsAgo },
+        ...orgFilter,
       },
     }),
 
     // All distributors' 12-month volume (for revenue share)
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { orderDate: { gte: twelveMonthsAgo } },
+      where: { orderDate: { gte: twelveMonthsAgo }, ...orgFilter },
     }),
 
     // All orders for this distributor (12 months) — for trends, outlet perf, product perf
     prisma.orderHistory.findMany({
-      where: { distributorId, orderDate: { gte: twelveMonthsAgo } },
+      where: { distributorId, orderDate: { gte: twelveMonthsAgo }, ...orgFilter },
       select: {
         productId: true,
         outletId: true,
@@ -113,7 +116,7 @@ export async function getDistributorDetail(distributorId: string) {
 
     // All outlets
     prisma.outlet.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
       select: { id: true, name: true, slug: true, type: true },
     }),
   ]);

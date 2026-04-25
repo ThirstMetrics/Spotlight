@@ -16,12 +16,14 @@ import {
 } from "@/lib/queries/inventory";
 import { InventoryTable } from "./InventoryTable";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getServerUser } from "@/lib/auth";
 
 export default async function InventoryPage() {
+  const user = await getServerUser();
   const [overview, items, alerts] = await Promise.all([
-    getInventoryOverview(),
-    getInventoryItems(),
-    getInventoryAlerts(),
+    getInventoryOverview(user?.organizationId),
+    getInventoryItems(user?.organizationId),
+    getInventoryAlerts(user?.organizationId),
   ]);
 
   const formatCurrency = (n: number) =>

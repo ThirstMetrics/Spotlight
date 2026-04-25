@@ -24,6 +24,7 @@ import {
   MessageSquare,
   BarChart3,
   Settings,
+  ClipboardList,
   ChevronLeft,
   Menu,
   LogOut,
@@ -97,6 +98,7 @@ const navGroups: NavGroup[] = [
   {
     label: "System",
     items: [
+      { href: "/admin/item-requests", label: "Item Requests", icon: ClipboardList },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/admin", label: "Admin", icon: Settings },
     ],
@@ -128,7 +130,7 @@ const navGroups: NavGroup[] = [
 ];
 
 function getVisibleNavGroups(role: UserRoleType | undefined): NavGroup[] {
-  if (!role) return navGroups; // fallback: show all (shouldn't happen)
+  if (!role) return []; // No role yet (loading) — show nothing until auth resolves
   return navGroups
     .filter((group) => !group.roles || group.roles.includes(role))
     .map((group) => ({
@@ -215,13 +217,13 @@ export function Sidebar() {
           {user?.role === "DISTRIBUTOR" || user?.role === "SUPPLIER" ? (
             <>
               <p className="text-xs opacity-60">{user.role === "DISTRIBUTOR" ? "Distributor" : "Supplier"} Portal</p>
-              <p className="text-sm font-medium truncate">Resorts World Las Vegas</p>
+              <p className="text-sm font-medium truncate">{user.organizationName ?? "Organization"}</p>
               <p className="text-xs opacity-60 capitalize">{displayRole}</p>
             </>
           ) : (
             <>
               <p className="text-xs opacity-60">Property</p>
-              <p className="text-sm font-medium truncate">Resorts World Las Vegas</p>
+              <p className="text-sm font-medium truncate">{user?.organizationName ?? "Organization"}</p>
               <p className="text-xs opacity-60 capitalize">{displayRole}</p>
             </>
           )}

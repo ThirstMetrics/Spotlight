@@ -16,6 +16,7 @@ import { CategoryPieChart } from "@/components/dashboard/OutletDetailCharts";
 import { ExportButton } from "@/components/dashboard/ExportButton";
 import { getOutletBySlug } from "@/lib/queries/outlets";
 import { getOutletDetailEnhanced } from "@/lib/queries/outlet-detail";
+import { getServerUser } from "@/lib/auth";
 import { OutletTabs } from "./OutletTabs";
 
 interface OutletDetailPageProps {
@@ -25,7 +26,10 @@ interface OutletDetailPageProps {
 export default async function OutletDetailPage({
   params,
 }: OutletDetailPageProps) {
-  const resolved = await getOutletBySlug(params.slug);
+  const user = await getServerUser();
+  const organizationId = user?.organizationId;
+
+  const resolved = await getOutletBySlug(params.slug, organizationId);
   if (!resolved) notFound();
 
   const data = await getOutletDetailEnhanced(resolved.id);

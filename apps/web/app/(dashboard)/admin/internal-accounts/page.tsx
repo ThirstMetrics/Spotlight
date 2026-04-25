@@ -5,6 +5,7 @@ import {
   getOutletOptions,
   getAdminOverview,
 } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { TrackingNumberTable } from "./TrackingNumberTable";
@@ -14,10 +15,12 @@ import { Hash, Building2, AlertTriangle, BarChart3 } from "lucide-react";
 import Link from "next/link";
 
 export default async function InternalAccountsPage() {
+  const user = await getServerUser();
+  const orgId = user?.organizationId;
   const [trackingNumbers, outlets, overview] = await Promise.all([
-    getAdminTrackingNumbers(),
-    getOutletOptions(),
-    getAdminOverview(),
+    getAdminTrackingNumbers(orgId),
+    getOutletOptions(orgId),
+    getAdminOverview(orgId),
   ]);
 
   const totalTracking = trackingNumbers.length;

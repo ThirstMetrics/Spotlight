@@ -16,12 +16,14 @@ import {
 import { ComplianceDrillDown } from "./ComplianceDrillDown";
 import { OutletComplianceCards } from "./OutletComplianceCards";
 import { ExportButton } from "@/components/dashboard/ExportButton";
+import { getServerUser } from "@/lib/auth";
 
 export default async function CompliancePage() {
+  const user = await getServerUser();
   const [overview, drillDown, byOutlet] = await Promise.all([
-    getComplianceOverview(),
-    getComplianceDrillDown(),
-    getComplianceByOutlet(),
+    getComplianceOverview(user?.organizationId),
+    getComplianceDrillDown(user?.organizationId),
+    getComplianceByOutlet(user?.organizationId),
   ]);
 
   return (

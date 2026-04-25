@@ -2,13 +2,17 @@ export const dynamic = "force-dynamic";
 
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getRecipeOverview, getRecipeList } from "@/lib/queries/recipes";
+import { getServerUser } from "@/lib/auth";
 import { NewRecipeButton } from "./NewRecipeButton";
 import { RecipeCard, type RecipeCardData } from "./RecipeCard";
 
 export default async function RecipesPage() {
+  const user = await getServerUser();
+  const organizationId = user?.organizationId;
+
   const [overview, recipes] = await Promise.all([
-    getRecipeOverview(),
-    getRecipeList(),
+    getRecipeOverview({ organizationId }),
+    getRecipeList({ organizationId }),
   ]);
 
   return (

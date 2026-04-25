@@ -6,10 +6,10 @@
 import { prisma } from "@spotlight/db";
 
 /** Get all outlets with order/sales stats and positions for the map */
-export async function getMapData() {
+export async function getMapData(organizationId?: string) {
   // Get all active outlets with order and sales counts
   const outlets = await prisma.outlet.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
     select: {
       id: true,
       name: true,

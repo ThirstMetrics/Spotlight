@@ -9,9 +9,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAdminOverview } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 
 export default async function AdminPage() {
-  const overview = await getAdminOverview();
+  const user = await getServerUser();
+  const overview = await getAdminOverview(user?.organizationId);
 
   const sections = [
     {

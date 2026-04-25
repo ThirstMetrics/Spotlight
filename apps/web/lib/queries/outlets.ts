@@ -6,12 +6,15 @@
 import { prisma } from "@spotlight/db";
 
 /** Get all outlets with summary stats */
-export async function getOutlets() {
+export async function getOutlets(organizationId?: string) {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
   const outlets = await prisma.outlet.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(organizationId ? { organizationId } : {}),
+    },
     include: {
       outletGroup: { select: { name: true } },
       costGoals: {
@@ -34,21 +37,33 @@ export async function getOutlets() {
     prisma.orderHistory.groupBy({
       by: ["outletId"],
       _count: { productId: true },
-      where: { orderDate: { gte: threeMonthsAgo } },
+      where: {
+        orderDate: { gte: threeMonthsAgo },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
     prisma.salesData.groupBy({
       by: ["outletId"],
       _sum: { revenue: true },
-      where: { saleDate: { gte: threeMonthsAgo } },
+      where: {
+        saleDate: { gte: threeMonthsAgo },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
     prisma.orderHistory.groupBy({
       by: ["outletId"],
       _sum: { totalCost: true },
-      where: { orderDate: { gte: threeMonthsAgo } },
+      where: {
+        orderDate: { gte: threeMonthsAgo },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
     prisma.mandateCompliance.groupBy({
       by: ["outletId"],
       _count: { id: true },
+      where: {
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
   ]);
 
@@ -83,23 +98,30 @@ export async function getOutlets() {
 }
 
 /** Resolve outlet slug to ID */
-export async function getOutletBySlug(slug: string) {
+export async function getOutletBySlug(slug: string, organizationId?: string) {
   return prisma.outlet.findFirst({
-    where: { slug, isActive: true },
+    where: {
+      slug,
+      isActive: true,
+      ...(organizationId ? { organizationId } : {}),
+    },
     select: { id: true, name: true, slug: true },
   });
 }
 
 /** Get detailed data for a single outlet */
-export async function getOutletDetail(outletId: string) {
+export async function getOutletDetail(outletId: string, organizationId?: string) {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
   const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
 
   const [outlet, products, monthlySales, categoryBreakdown, complianceData] = await Promise.all([
     // Outlet info
-    prisma.outlet.findUnique({
-      where: { id: outletId },
+    prisma.outlet.findFirst({
+      where: {
+        id: outletId,
+        ...(organizationId ? { organizationId } : {}),
+      },
       include: {
         outletGroup: { select: { name: true } },
         costGoals: { orderBy: { effectiveDate: "desc" }, take: 1 },

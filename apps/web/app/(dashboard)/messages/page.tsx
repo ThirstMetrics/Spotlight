@@ -2,15 +2,22 @@ export const dynamic = "force-dynamic";
 
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getMessageOverview } from "@/lib/queries/messages";
+import { getServerUser } from "@/lib/auth";
 import { prisma } from "@spotlight/db";
 import { MessageCompose } from "./MessageCompose";
 import { MessageList } from "./MessageList";
 
 export default async function MessagesPage() {
+  const user = await getServerUser();
+  const organizationId = user?.organizationId;
+
   const [overview, outlets] = await Promise.all([
-    getMessageOverview(),
+    getMessageOverview(organizationId),
     prisma.outlet.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(organizationId ? { organizationId } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

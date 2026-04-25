@@ -9,11 +9,13 @@ import {
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getAdminOutletGroups } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { OutletGroupTable } from "./OutletGroupTable";
 import { OutletGroupForm } from "./OutletGroupForm";
 
 export default async function OutletGroupsPage() {
-  const groups = await getAdminOutletGroups();
+  const user = await getServerUser();
+  const groups = await getAdminOutletGroups(user?.organizationId);
 
   const totalGroups = groups.length;
   const totalOutletsAssigned = groups.reduce(

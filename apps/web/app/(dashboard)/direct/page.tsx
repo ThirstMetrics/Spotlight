@@ -9,12 +9,16 @@ import {
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getDirectOverview, getDirectTrackingBoard } from "@/lib/queries/direct";
+import { getServerUser } from "@/lib/auth";
 import { DirectOrdersTable } from "./DirectOrdersTable";
 
 export default async function DirectPage() {
+  const user = await getServerUser();
+  const organizationId = user?.organizationId;
+
   const [overview, trackingBoard] = await Promise.all([
-    getDirectOverview(),
-    getDirectTrackingBoard(),
+    getDirectOverview({ organizationId }),
+    getDirectTrackingBoard({ organizationId }),
   ]);
 
   return (

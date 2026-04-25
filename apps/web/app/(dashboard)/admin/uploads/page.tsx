@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getUploadHistory, getUploadStats } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { UploadsTable } from "./UploadsTable";
 import { FileUploader } from "@/components/dashboard/FileUploader";
 
@@ -20,9 +21,11 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default async function UploadsPage() {
+  const user = await getServerUser();
+  const orgId = user?.organizationId;
   const [uploads, stats] = await Promise.all([
-    getUploadHistory(),
-    getUploadStats(),
+    getUploadHistory(50, orgId),
+    getUploadStats(orgId),
   ]);
 
   return (

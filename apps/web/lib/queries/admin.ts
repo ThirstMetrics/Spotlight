@@ -3,7 +3,7 @@ import { prisma } from "@spotlight/db";
 /**
  * Get admin dashboard overview counts.
  */
-export async function getAdminOverview() {
+export async function getAdminOverview(organizationId?: string) {
   const [
     outletCount,
     outletGroupCount,
@@ -14,14 +14,35 @@ export async function getAdminOverview() {
     alertRuleCount,
     trackingNumberCount,
   ] = await Promise.all([
-    prisma.outlet.count({ where: { isActive: true } }),
-    prisma.outletGroup.count(),
-    prisma.costGoal.count(),
-    prisma.user.count({ where: { isActive: true } }),
-    prisma.fieldMappingProfile.count(),
-    prisma.upload.count(),
-    prisma.alertRule.count(),
-    prisma.outletTrackingNumber.count(),
+    prisma.outlet.count({
+      where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.outletGroup.count({
+      where: { ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.costGoal.count({
+      where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
+    }),
+    prisma.user.count({
+      where: {
+        isActive: true,
+        ...(organizationId
+          ? { userRoles: { some: { organizationId } } }
+          : {}),
+      },
+    }),
+    prisma.fieldMappingProfile.count({
+      where: { ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.upload.count({
+      where: { ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.alertRule.count({
+      where: { ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.outletTrackingNumber.count({
+      where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
+    }),
   ]);
 
   return {
@@ -39,8 +60,9 @@ export async function getAdminOverview() {
 /**
  * Get upload history with status and record counts.
  */
-export async function getUploadHistory(limit = 50) {
+export async function getUploadHistory(limit = 50, organizationId?: string) {
   return prisma.upload.findMany({
+    where: { ...(organizationId ? { organizationId } : {}) },
     include: {
       uploader: { select: { name: true, email: true } },
     },
@@ -52,8 +74,9 @@ export async function getUploadHistory(limit = 50) {
 /**
  * Get alert rules with counts of triggered alerts.
  */
-export async function getAlertRules() {
+export async function getAlertRules(organizationId?: string) {
   const rules = await prisma.alertRule.findMany({
+    where: { ...(organizationId ? { organizationId } : {}) },
     include: {
       appliesToOutlet: { select: { name: true } },
       appliesToProduct: { select: { name: true, sku: true } },
@@ -66,7 +89,10 @@ export async function getAlertRules() {
   const alertCounts = await prisma.alert.groupBy({
     by: ["alertType"],
     _count: { id: true },
-    where: { isDismissed: false },
+    where: {
+      isDismissed: false,
+      ...(organizationId ? { organizationId } : {}),
+    },
   });
 
   const countMap = new Map(alertCounts.map((a) => [a.alertType, a._count.id]));
@@ -91,8 +117,9 @@ export async function getAlertRules() {
 /**
  * Get outlets with group, manager, and order count.
  */
-export async function getAdminOutlets() {
+export async function getAdminOutlets(organizationId?: string) {
   const outlets = await prisma.outlet.findMany({
+    where: { ...(organizationId ? { organizationId } : {}) },
     include: {
       outletGroup: { select: { id: true, name: true } },
       _count: { select: { orderHistory: true } },
@@ -118,8 +145,9 @@ export async function getAdminOutlets() {
 /**
  * Get lightweight outlet group list for select dropdowns.
  */
-export async function getOutletGroupOptions() {
+export async function getOutletGroupOptions(organizationId?: string) {
   return prisma.outletGroup.findMany({
+    where: { ...(organizationId ? { organizationId } : {}) },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -132,8 +160,9 @@ export async function getOutletGroupOptions() {
 /**
  * Get outlet groups with assigned outlets.
  */
-export async function getAdminOutletGroups() {
+export async function getAdminOutletGroups(organizationId?: string) {
   const groups = await prisma.outletGroup.findMany({
+    where: { ...(organizationId ? { organizationId } : {}) },
     include: {
       outlets: { select: { id: true, name: true, isActive: true } },
     },
@@ -156,8 +185,9 @@ export async function getAdminOutletGroups() {
 /**
  * Get cost goals with outlet names.
  */
-export async function getAdminCostGoals() {
+export async function getAdminCostGoals(organizationId?: string) {
   const goals = await prisma.costGoal.findMany({
+    where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
     include: {
       outlet: { select: { name: true } },
       creator: { select: { name: true } },
@@ -184,8 +214,13 @@ export async function getAdminCostGoals() {
 /**
  * Get users with role assignments.
  */
-export async function getAdminUsers() {
+export async function getAdminUsers(organizationId?: string) {
   const users = await prisma.user.findMany({
+    where: {
+      ...(organizationId
+        ? { userRoles: { some: { organizationId } } }
+        : {}),
+    },
     include: {
       userRoles: {
         include: {
@@ -227,8 +262,9 @@ export async function getAdminUsers() {
 /**
  * Get field mapping profiles.
  */
-export async function getAdminFieldMappings() {
+export async function getAdminFieldMappings(organizationId?: string) {
   const profiles = await prisma.fieldMappingProfile.findMany({
+    where: { ...(organizationId ? { organizationId } : {}) },
     include: {
       creator: { select: { name: true } },
     },
@@ -253,8 +289,9 @@ export async function getAdminFieldMappings() {
 /**
  * Get all outlet tracking numbers with outlet info.
  */
-export async function getAdminTrackingNumbers() {
+export async function getAdminTrackingNumbers(organizationId?: string) {
   const records = await prisma.outletTrackingNumber.findMany({
+    where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
     include: {
       outlet: { select: { name: true, type: true, isActive: true } },
     },
@@ -278,10 +315,10 @@ export async function getAdminTrackingNumbers() {
 /**
  * Get lightweight outlet list for dropdowns and paste-import matching.
  */
-export async function getOutletOptions() {
+export async function getOutletOptions(organizationId?: string) {
   return prisma.outlet.findMany({
     select: { id: true, name: true },
-    where: { isActive: true },
+    where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
     orderBy: { name: "asc" },
   });
 }
@@ -293,17 +330,19 @@ export async function getOutletOptions() {
 /**
  * Get upload stats summary.
  */
-export async function getUploadStats() {
+export async function getUploadStats(organizationId?: string) {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
+  const orgFilter = organizationId ? { organizationId } : {};
+
   const [total, recent, completed, failed, totalRecords] = await Promise.all([
-    prisma.upload.count(),
-    prisma.upload.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
-    prisma.upload.count({ where: { status: "COMPLETED" } }),
-    prisma.upload.count({ where: { status: "FAILED" } }),
+    prisma.upload.count({ where: { ...orgFilter } }),
+    prisma.upload.count({ where: { createdAt: { gte: thirtyDaysAgo }, ...orgFilter } }),
+    prisma.upload.count({ where: { status: "COMPLETED", ...orgFilter } }),
+    prisma.upload.count({ where: { status: "FAILED", ...orgFilter } }),
     prisma.upload.aggregate({
       _sum: { recordsProcessed: true },
-      where: { status: "COMPLETED" },
+      where: { status: "COMPLETED", ...orgFilter },
     }),
   ]);
 

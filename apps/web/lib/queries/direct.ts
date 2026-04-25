@@ -6,23 +6,29 @@
 import { prisma } from "@spotlight/db";
 
 /** Get direct order overview stats */
-export async function getDirectOverview() {
+export async function getDirectOverview(options?: { organizationId?: string }) {
+  const { organizationId } = options ?? {};
+  const orgFilter = organizationId ? { organizationId } : {};
+
   const [totalDirectItems, supplierCount, outletsReceiving] = await Promise.all([
     prisma.directOrder.groupBy({
       by: ["productId"],
+      where: { ...orgFilter },
       _count: { id: true },
     }),
     prisma.directOrder.groupBy({
       by: ["supplierId"],
+      where: { ...orgFilter },
       _count: { id: true },
     }),
     prisma.directOrder.groupBy({
       by: ["outletId"],
+      where: { ...orgFilter },
       _count: { id: true },
     }),
   ]);
 
-  const totalOutlets = await prisma.outlet.count({ where: { isActive: true } });
+  const totalOutlets = await prisma.outlet.count({ where: { isActive: true, ...orgFilter } });
 
   return {
     directItems: totalDirectItems.length,
@@ -33,8 +39,10 @@ export async function getDirectOverview() {
 }
 
 /** Get direct order tracking board — all direct items with outlets and frequency */
-export async function getDirectTrackingBoard() {
+export async function getDirectTrackingBoard(options?: { organizationId?: string }) {
+  const { organizationId } = options ?? {};
   const orders = await prisma.directOrder.findMany({
+    where: { ...(organizationId ? { organizationId } : {}) },
     include: {
       product: { select: { name: true, sku: true, category: true } },
       outlet: { select: { name: true, slug: true } },

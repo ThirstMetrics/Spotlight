@@ -1,12 +1,28 @@
 import { prisma } from "@spotlight/db";
 
 /**
+ * Build a user filter clause that scopes portal queries to users belonging
+ * to the given organization (via their role assignments).
+ */
+function userOrgFilter(organizationId?: string) {
+  if (!organizationId) return {};
+  return {
+    user: {
+      userRoles: {
+        some: { organizationId },
+      },
+    },
+  };
+}
+
+/**
  * Get portal analytics overview metrics.
  */
-export async function getAnalyticsOverview() {
+export async function getAnalyticsOverview(organizationId?: string) {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const orgFilter = userOrgFilter(organizationId);
 
   const [
     activeSessions,
@@ -19,21 +35,23 @@ export async function getAnalyticsOverview() {
       where: {
         logoutAt: null,
         loginAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+        ...orgFilter,
       },
     }),
     // Logins this week
     prisma.portalSession.count({
-      where: { loginAt: { gte: sevenDaysAgo } },
+      where: { loginAt: { gte: sevenDaysAgo }, ...orgFilter },
     }),
     // Total interactions last 30 days
     prisma.portalInteraction.count({
-      where: { createdAt: { gte: thirtyDaysAgo } },
+      where: { createdAt: { gte: thirtyDaysAgo }, ...orgFilter },
     }),
     // Exports last 30 days
     prisma.portalInteraction.count({
       where: {
         createdAt: { gte: thirtyDaysAgo },
         action: { contains: "export" },
+        ...orgFilter,
       },
     }),
   ]);
@@ -49,8 +67,11 @@ export async function getAnalyticsOverview() {
 /**
  * Get recent portal sessions with user details.
  */
-export async function getRecentSessions(limit = 20) {
+export async function getRecentSessions(limit = 20, organizationId?: string) {
   return prisma.portalSession.findMany({
+    where: {
+      ...userOrgFilter(organizationId),
+    },
     include: {
       user: {
         select: {
@@ -74,7 +95,19 @@ export async function getRecentSessions(limit = 20) {
 /**
  * Get most-viewed pages from portal interactions.
  */
-export async function getTopPages(limit = 10) {
+export async function getTopPages(limit = 10, organizationId?: string) {
+  // When org-scoped, we can't use groupBy with a relation filter directly,
+  // so we first find the user IDs in the org, then filter interactions.
+  let userIdFilter: { userId?: { in: string[] } } = {};
+  if (organizationId) {
+    const orgUsers = await prisma.userRoleAssignment.findMany({
+      where: { organizationId },
+      select: { userId: true },
+      distinct: ["userId"],
+    });
+    userIdFilter = { userId: { in: orgUsers.map((u) => u.userId) } };
+  }
+
   const interactions = await prisma.portalInteraction.groupBy({
     by: ["pagePath"],
     _count: { id: true },
@@ -82,6 +115,7 @@ export async function getTopPages(limit = 10) {
       createdAt: {
         gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
       },
+      ...userIdFilter,
     },
     orderBy: { _count: { id: "desc" } },
     take: limit,
@@ -96,11 +130,14 @@ export async function getTopPages(limit = 10) {
 /**
  * Get login trend data by day for the last 30 days.
  */
-export async function getLoginTrend() {
+export async function getLoginTrend(organizationId?: string) {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const sessions = await prisma.portalSession.findMany({
-    where: { loginAt: { gte: thirtyDaysAgo } },
+    where: {
+      loginAt: { gte: thirtyDaysAgo },
+      ...userOrgFilter(organizationId),
+    },
     select: { loginAt: true },
     orderBy: { loginAt: "asc" },
   });

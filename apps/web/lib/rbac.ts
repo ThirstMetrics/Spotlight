@@ -221,8 +221,10 @@ export function filterByScope<
   switch (user.role) {
     case UserRoleType.VP:
     case UserRoleType.DIRECTOR:
-      // Full access — return everything.
-      return data;
+      if (!user.organizationId) return data;
+      return data.filter(
+        (record) => record.organizationId === user.organizationId,
+      );
 
     case UserRoleType.ADMIN:
       if (!user.organizationId) return data;

@@ -8,19 +8,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { getAdminUsers } from "@/lib/queries/admin";
+import { getAdminUsers, getOutletOptions } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { prisma } from "@spotlight/db";
 import { UsersTable } from "./UsersTable";
 import { UserForm } from "./UserForm";
 
 export default async function UsersPage() {
+  const user = await getServerUser();
+  const orgId = user?.organizationId;
   const [users, outlets, distributors, suppliers] = await Promise.all([
-    getAdminUsers(),
-    prisma.outlet.findMany({
-      select: { id: true, name: true },
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
+    getAdminUsers(orgId),
+    getOutletOptions(orgId),
     prisma.distributor.findMany({
       select: { id: true, name: true },
       orderBy: { name: "asc" },

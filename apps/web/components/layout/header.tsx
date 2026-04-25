@@ -42,7 +42,7 @@ function getRoleViewLabel(user: AuthUser | null): {
 
   return {
     label: `${roleName} View`,
-    org: "Resorts World Las Vegas",
+    org: user.organizationName ?? "Organization",
   };
 }
 

@@ -27,9 +27,12 @@ export default async function DistributorsPage() {
     redirect("/overview");
   }
 
+  // Internal users see data scoped to their org; partner users see cross-org data.
+  const orgScope = user?.role === 'DISTRIBUTOR' ? undefined : user?.organizationId;
+
   const [distributors, overview] = await Promise.all([
-    getDistributors(),
-    getPartnerOverview(),
+    getDistributors(orgScope),
+    getPartnerOverview(orgScope),
   ]);
 
   const formatCurrency = (n: number) =>

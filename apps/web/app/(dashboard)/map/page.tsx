@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import nextDynamic from "next/dynamic";
 import { getMapData } from "@/lib/queries/map";
+import { getServerUser } from "@/lib/auth";
 
 const OutletMap = nextDynamic(() => import("./OutletMap"), {
   ssr: false,
@@ -23,7 +24,9 @@ const OutletMap = nextDynamic(() => import("./OutletMap"), {
 });
 
 export default async function MapPage() {
-  const { outlets, summary } = await getMapData();
+  const user = await getServerUser();
+  const { outlets, summary } = await getMapData(user?.organizationId);
+  const orgName = user?.organizationName ?? "Property";
 
   return (
     <div className="space-y-6">
@@ -32,7 +35,7 @@ export default async function MapPage() {
           Map View
         </h1>
         <p className="text-muted-foreground">
-          Geographic visualization of product placement across Resorts World
+          Geographic visualization of product placement across {orgName}{" "}
           outlets.
         </p>
       </div>
@@ -89,7 +92,7 @@ export default async function MapPage() {
       {/* Map */}
       <Card>
         <CardHeader>
-          <CardTitle>Resorts World Las Vegas — Outlet Map</CardTitle>
+          <CardTitle>{orgName} — Outlet Map</CardTitle>
           <CardDescription>
             Click an outlet marker to view order volume, product count, and
             sales data. Marker size reflects relative order volume.

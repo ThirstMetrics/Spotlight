@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { getAuthToken } from "@/lib/hooks/use-auth";
 
 // === Types ===
 
@@ -55,6 +56,7 @@ interface WineRow {
 
 interface DistributorTabsProps {
   distributorName: string;
+  organizationName: string;
   outletPerformance: OutletRow[];
   productPerformance: ProductRow[];
   winePortfolio: WineRow[];
@@ -349,10 +351,10 @@ function WinePortfolio({ data }: { data: WineRow[] }) {
   );
 }
 
-// === RWLV Item Add Form (matches Resorts World Las Vegas setup spreadsheet) ===
+// === New Item Setup Form ===
 
 interface RwlvSetupItem {
-  id: number;
+  id: string;
   rwlvDescription: string;
   category: string;
   vendor: string;
@@ -369,7 +371,10 @@ interface RwlvSetupItem {
   canSplitCase: string;
   orderBy: string;
   priceBy: string;
-  status: "draft" | "submitted";
+  status: string;
+  createdAt: string;
+  reviewNote?: string | null;
+  reviewer?: { name: string } | null;
 }
 
 const EMPTY_SETUP_ITEM = {
@@ -391,19 +396,55 @@ const EMPTY_SETUP_ITEM = {
   priceBy: "case",
 };
 
-function NewItemSetup({ distributorName }: { distributorName: string }) {
+function NewItemSetup({ distributorName, organizationName }: { distributorName: string; organizationName: string }) {
   const [items, setItems] = useState<RwlvSetupItem[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_SETUP_ITEM, vendor: distributorName });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
+  const fetchRequests = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch("/api/admin/item-requests", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (json.success) setItems(json.data);
+    } catch {
+      // silently fail on fetch
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
+  const handleSubmit = async () => {
     if (!form.rwlvDescription.trim()) return;
-    setItems((prev) => [
-      ...prev,
-      { ...form, id: Date.now(), status: "submitted" as const },
-    ]);
-    setForm({ ...EMPTY_SETUP_ITEM, vendor: distributorName });
-    setShowForm(false);
+    setSubmitting(true);
+    setError(null);
+    try {
+      const token = getAuthToken();
+      const res = await fetch("/api/admin/item-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(form),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setForm({ ...EMPTY_SETUP_ITEM, vendor: distributorName });
+      setShowForm(false);
+      fetchRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const F = ({ label, value, field, placeholder, span }: { label: string; value: string; field: string; placeholder?: string; span?: number }) => (
@@ -436,9 +477,9 @@ function NewItemSetup({ distributorName }: { distributorName: string }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-lg">RWLV Item Add Form</CardTitle>
+            <CardTitle className="text-lg">{organizationName} Item Add Form</CardTitle>
             <CardDescription>
-              Submit new items using the Resorts World Las Vegas setup format. Items flow to the director&apos;s pending approval workflow.
+              Submit new items using the {organizationName} setup format. Items flow to the director&apos;s pending approval workflow.
             </CardDescription>
           </div>
           <button
@@ -455,11 +496,11 @@ function NewItemSetup({ distributorName }: { distributorName: string }) {
           <div className="mb-6 rounded-lg border border-[#06113e]/20 bg-gray-50/50 p-4">
             <div className="flex items-center gap-2 mb-3">
               <h4 className="text-sm font-semibold text-[#06113e]">New Item Setup</h4>
-              <Badge variant="secondary" className="text-[10px]">RWLV Format</Badge>
+              <Badge variant="secondary" className="text-[10px]">{organizationName} Format</Badge>
             </div>
             <div className="grid gap-x-3 gap-y-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
               <div className="col-span-2">
-                <F label="RWLV Product Description *" value={form.rwlvDescription} field="rwlvDescription" placeholder="e.g., Opus One 2021 750ML/6" />
+                <F label="Product Description *" value={form.rwlvDescription} field="rwlvDescription" placeholder="e.g., Opus One 2021 750ML/6" />
               </div>
               <F label="Category" value={form.category} field="category" placeholder="e.g., CALIFORNIA Red" />
               <F label="Vendor" value={form.vendor} field="vendor" placeholder={distributorName} />
@@ -479,12 +520,16 @@ function NewItemSetup({ distributorName }: { distributorName: string }) {
               <Sel label="Order By" value={form.orderBy} field="orderBy" options={["case", "each", "keg"]} />
               <Sel label="Price By" value={form.priceBy} field="priceBy" options={["case", "each", "keg"]} />
             </div>
+            {error && (
+              <p className="text-sm text-red-600 mt-2">{error}</p>
+            )}
             <div className="flex gap-2 mt-4">
               <button
                 onClick={handleSubmit}
-                className="px-4 py-2 text-sm font-medium text-white rounded-md bg-[#06113e] hover:bg-[#06113e]/90"
+                disabled={submitting}
+                className="px-4 py-2 text-sm font-medium text-white rounded-md bg-[#06113e] hover:bg-[#06113e]/90 disabled:opacity-50"
               >
-                Submit for Review
+                {submitting ? "Submitting..." : "Submit for Review"}
               </button>
               <button
                 onClick={() => setShowForm(false)}
@@ -502,7 +547,7 @@ function NewItemSetup({ distributorName }: { distributorName: string }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-gray-50/50">
-                  <th className="px-2 py-2 text-left font-medium text-gray-600">RWLV Description</th>
+                  <th className="px-2 py-2 text-left font-medium text-gray-600">Description</th>
                   <th className="px-2 py-2 text-left font-medium text-gray-600">Category</th>
                   <th className="px-2 py-2 text-left font-medium text-gray-600">Vendor</th>
                   <th className="px-2 py-2 text-left font-medium text-gray-600">Vendor #</th>
@@ -529,8 +574,15 @@ function NewItemSetup({ distributorName }: { distributorName: string }) {
                     <td className="px-2 py-2 text-right font-medium">{item.vendorCost ? `$${item.vendorCost}` : "—"}</td>
                     <td className="px-2 py-2">{item.canSplitCase}</td>
                     <td className="px-2 py-2">
-                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 text-[10px]">
-                        Pending Review
+                      <Badge className={`text-[10px] ${
+                        item.status === "APPROVED" ? "bg-green-100 text-green-800 hover:bg-green-100" :
+                        item.status === "REJECTED" ? "bg-red-100 text-red-800 hover:bg-red-100" :
+                        item.status === "NEEDS_INFO" ? "bg-blue-100 text-blue-800 hover:bg-blue-100" :
+                        "bg-amber-100 text-amber-800 hover:bg-amber-100"
+                      }`}>
+                        {item.status === "PENDING" ? "Pending Review" :
+                         item.status === "NEEDS_INFO" ? "Needs Info" :
+                         item.status.charAt(0) + item.status.slice(1).toLowerCase()}
                       </Badge>
                     </td>
                   </tr>
@@ -543,7 +595,7 @@ function NewItemSetup({ distributorName }: { distributorName: string }) {
             <div className="py-12 text-center">
               <p className="text-sm text-muted-foreground mb-1">No new items submitted</p>
               <p className="text-xs text-muted-foreground">
-                Click &ldquo;+ Add Item&rdquo; to submit a product setup for Resorts World approval.
+                Click &ldquo;+ Add Item&rdquo; to submit a product setup for {organizationName} approval.
               </p>
             </div>
           )
@@ -555,7 +607,7 @@ function NewItemSetup({ distributorName }: { distributorName: string }) {
 
 // === Main Export ===
 
-export function DistributorTabs({ distributorName, outletPerformance, productPerformance, winePortfolio }: DistributorTabsProps) {
+export function DistributorTabs({ distributorName, organizationName, outletPerformance, productPerformance, winePortfolio }: DistributorTabsProps) {
   const [activeView, setActiveView] = useState<"current" | "new-items">("current");
 
   return (
@@ -591,7 +643,7 @@ export function DistributorTabs({ distributorName, outletPerformance, productPer
           <WinePortfolio data={winePortfolio} />
         </>
       ) : (
-        <NewItemSetup distributorName={distributorName} />
+        <NewItemSetup distributorName={distributorName} organizationName={organizationName} />
       )}
     </div>
   );

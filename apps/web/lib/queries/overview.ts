@@ -6,7 +6,7 @@
 import { prisma } from "@spotlight/db";
 
 /** Get key metric cards for the overview dashboard */
-export async function getOverviewMetrics() {
+export async function getOverviewMetrics(organizationId?: string) {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
@@ -19,7 +19,7 @@ export async function getOverviewMetrics() {
     totalRevenue,
     totalCost,
   ] = await Promise.all([
-    // Total SKUs
+    // Total SKUs (global catalog, no org filter)
     prisma.product.count({ where: { isActive: true } }),
 
     // Active outlets (those with orders in last 30 days)
@@ -27,30 +27,50 @@ export async function getOverviewMetrics() {
       where: {
         isActive: true,
         orderHistory: { some: { orderDate: { gte: thirtyDaysAgo } } },
+        ...(organizationId ? { organizationId } : {}),
       },
     }),
 
     // Compliance stats
     Promise.all([
-      prisma.mandateCompliance.count({ where: { isCompliant: true } }),
-      prisma.mandateCompliance.count(),
+      prisma.mandateCompliance.count({
+        where: {
+          isCompliant: true,
+          ...(organizationId ? { outlet: { organizationId } } : {}),
+        },
+      }),
+      prisma.mandateCompliance.count({
+        where: {
+          ...(organizationId ? { outlet: { organizationId } } : {}),
+        },
+      }),
     ]),
 
     // Open alerts (unread, not dismissed)
     prisma.alert.count({
-      where: { isDismissed: false, isRead: false },
+      where: {
+        isDismissed: false,
+        isRead: false,
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
 
     // Total revenue (last 12 months)
     prisma.salesData.aggregate({
       _sum: { revenue: true },
-      where: { saleDate: { gte: oneYearAgo } },
+      where: {
+        saleDate: { gte: oneYearAgo },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
 
     // Total cost (last 12 months)
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { orderDate: { gte: oneYearAgo } },
+      where: {
+        orderDate: { gte: oneYearAgo },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
   ]);
 
@@ -76,12 +96,15 @@ export async function getOverviewMetrics() {
 }
 
 /** Get monthly volume data for the last 12 months, grouped by category */
-export async function getVolumeByMonth() {
+export async function getVolumeByMonth(organizationId?: string) {
   const now = new Date();
   const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
 
   const orders = await prisma.orderHistory.findMany({
-    where: { orderDate: { gte: twelveMonthsAgo } },
+    where: {
+      orderDate: { gte: twelveMonthsAgo },
+      ...(organizationId ? { outlet: { organizationId } } : {}),
+    },
     select: {
       quantity: true,
       orderDate: true,
@@ -117,14 +140,17 @@ export async function getVolumeByMonth() {
 }
 
 /** Get top products by volume */
-export async function getTopProducts(limit = 10) {
+export async function getTopProducts(limit = 10, organizationId?: string) {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
   const products = await prisma.orderHistory.groupBy({
     by: ["productId"],
     _sum: { quantity: true, totalCost: true },
-    where: { orderDate: { gte: threeMonthsAgo } },
+    where: {
+      orderDate: { gte: threeMonthsAgo },
+      ...(organizationId ? { outlet: { organizationId } } : {}),
+    },
     orderBy: { _sum: { quantity: "desc" } },
     take: limit,
   });
@@ -150,9 +176,12 @@ export async function getTopProducts(limit = 10) {
 }
 
 /** Get recent alerts */
-export async function getRecentAlerts(limit = 5) {
+export async function getRecentAlerts(limit = 5, organizationId?: string) {
   return prisma.alert.findMany({
-    where: { isDismissed: false },
+    where: {
+      isDismissed: false,
+      ...(organizationId ? { outlet: { organizationId } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
     include: {
@@ -163,12 +192,15 @@ export async function getRecentAlerts(limit = 5) {
 }
 
 /** Get cost % vs goal by outlet */
-export async function getCostVsGoalByOutlet() {
+export async function getCostVsGoalByOutlet(organizationId?: string) {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
   const outlets = await prisma.outlet.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(organizationId ? { organizationId } : {}),
+    },
     select: {
       id: true,
       name: true,
@@ -186,12 +218,18 @@ export async function getCostVsGoalByOutlet() {
     prisma.salesData.groupBy({
       by: ["outletId"],
       _sum: { revenue: true },
-      where: { saleDate: { gte: threeMonthsAgo } },
+      where: {
+        saleDate: { gte: threeMonthsAgo },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
     prisma.orderHistory.groupBy({
       by: ["outletId"],
       _sum: { totalCost: true },
-      where: { orderDate: { gte: threeMonthsAgo } },
+      where: {
+        orderDate: { gte: threeMonthsAgo },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
   ]);
 
@@ -218,7 +256,7 @@ export async function getCostVsGoalByOutlet() {
 }
 
 /** Get YoY comparison data */
-export async function getYoYComparison() {
+export async function getYoYComparison(organizationId?: string) {
   const now = new Date();
   const thisYearStart = new Date(now.getFullYear(), 0, 1);
   const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
@@ -227,19 +265,31 @@ export async function getYoYComparison() {
   const [thisYearVolume, lastYearVolume, thisYearCost, lastYearCost] = await Promise.all([
     prisma.orderHistory.aggregate({
       _sum: { quantity: true },
-      where: { orderDate: { gte: thisYearStart } },
+      where: {
+        orderDate: { gte: thisYearStart },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
     prisma.orderHistory.aggregate({
       _sum: { quantity: true },
-      where: { orderDate: { gte: lastYearStart, lte: lastYearEnd } },
+      where: {
+        orderDate: { gte: lastYearStart, lte: lastYearEnd },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { orderDate: { gte: thisYearStart } },
+      where: {
+        orderDate: { gte: thisYearStart },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { orderDate: { gte: lastYearStart, lte: lastYearEnd } },
+      where: {
+        orderDate: { gte: lastYearStart, lte: lastYearEnd },
+        ...(organizationId ? { outlet: { organizationId } } : {}),
+      },
     }),
   ]);
 

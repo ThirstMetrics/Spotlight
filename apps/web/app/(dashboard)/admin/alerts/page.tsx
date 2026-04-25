@@ -10,17 +10,21 @@ import {
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { getAlertRules } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { prisma } from "@spotlight/db";
 import { AlertRulesTable } from "./AlertRulesTable";
 
 export default async function AlertRulesPage() {
+  const user = await getServerUser();
+  const orgId = user?.organizationId;
+  const orgFilter = orgId ? { organizationId: orgId } : {};
   const [rules, alertStats] = await Promise.all([
-    getAlertRules(),
+    getAlertRules(orgId),
     Promise.all([
-      prisma.alertRule.count({ where: { isEnabled: true } }),
-      prisma.alert.count({ where: { isDismissed: false, isRead: false } }),
-      prisma.alert.count(),
-      prisma.alert.count({ where: { isDismissed: true } }),
+      prisma.alertRule.count({ where: { isEnabled: true, ...orgFilter } }),
+      prisma.alert.count({ where: { isDismissed: false, isRead: false, ...orgFilter } }),
+      prisma.alert.count({ where: { ...orgFilter } }),
+      prisma.alert.count({ where: { isDismissed: true, ...orgFilter } }),
     ]),
   ]);
 

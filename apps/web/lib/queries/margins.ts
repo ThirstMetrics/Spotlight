@@ -6,27 +6,29 @@
 import { prisma } from "@spotlight/db";
 
 /** Get margin overview metrics */
-export async function getMarginMetrics() {
+export async function getMarginMetrics(organizationId?: string) {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
   const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
 
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
+
   const [revenueAgg, costAgg, prevRevenueAgg, prevCostAgg] = await Promise.all([
     prisma.salesData.aggregate({
       _sum: { revenue: true },
-      where: { saleDate: { gte: threeMonthsAgo } },
+      where: { saleDate: { gte: threeMonthsAgo }, ...orgFilter },
     }),
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { orderDate: { gte: threeMonthsAgo } },
+      where: { orderDate: { gte: threeMonthsAgo }, ...orgFilter },
     }),
     prisma.salesData.aggregate({
       _sum: { revenue: true },
-      where: { saleDate: { gte: sixMonthsAgo, lt: threeMonthsAgo } },
+      where: { saleDate: { gte: sixMonthsAgo, lt: threeMonthsAgo }, ...orgFilter },
     }),
     prisma.orderHistory.aggregate({
       _sum: { totalCost: true },
-      where: { orderDate: { gte: sixMonthsAgo, lt: threeMonthsAgo } },
+      where: { orderDate: { gte: sixMonthsAgo, lt: threeMonthsAgo }, ...orgFilter },
     }),
   ]);
 
@@ -59,17 +61,19 @@ export async function getMarginMetrics() {
 }
 
 /** Get monthly revenue vs cost trend */
-export async function getMonthlyMarginTrend() {
+export async function getMonthlyMarginTrend(organizationId?: string) {
   const now = new Date();
   const twelveMonthsAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
 
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
+
   const [salesData, costData] = await Promise.all([
     prisma.salesData.findMany({
-      where: { saleDate: { gte: twelveMonthsAgo } },
+      where: { saleDate: { gte: twelveMonthsAgo }, ...orgFilter },
       select: { revenue: true, saleDate: true },
     }),
     prisma.orderHistory.findMany({
-      where: { orderDate: { gte: twelveMonthsAgo } },
+      where: { orderDate: { gte: twelveMonthsAgo }, ...orgFilter },
       select: { totalCost: true, orderDate: true },
     }),
   ]);
@@ -105,17 +109,19 @@ export async function getMonthlyMarginTrend() {
 }
 
 /** Get category margin breakdown */
-export async function getCategoryMargins() {
+export async function getCategoryMargins(organizationId?: string) {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
+
   const [salesByCategory, costByCategory] = await Promise.all([
     prisma.salesData.findMany({
-      where: { saleDate: { gte: threeMonthsAgo } },
+      where: { saleDate: { gte: threeMonthsAgo }, ...orgFilter },
       select: { revenue: true, product: { select: { category: true } } },
     }),
     prisma.orderHistory.findMany({
-      where: { orderDate: { gte: threeMonthsAgo } },
+      where: { orderDate: { gte: threeMonthsAgo }, ...orgFilter },
       select: { totalCost: true, product: { select: { category: true } } },
     }),
   ]);
@@ -147,12 +153,12 @@ export async function getCategoryMargins() {
 }
 
 /** Get margin by outlet */
-export async function getMarginByOutlet() {
+export async function getMarginByOutlet(organizationId?: string) {
   const now = new Date();
   const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
   const outlets = await prisma.outlet.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
     select: {
       id: true,
       name: true,
@@ -165,16 +171,18 @@ export async function getMarginByOutlet() {
     },
   });
 
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
+
   const [salesByOutlet, costsByOutlet] = await Promise.all([
     prisma.salesData.groupBy({
       by: ["outletId"],
       _sum: { revenue: true },
-      where: { saleDate: { gte: threeMonthsAgo } },
+      where: { saleDate: { gte: threeMonthsAgo }, ...orgFilter },
     }),
     prisma.orderHistory.groupBy({
       by: ["outletId"],
       _sum: { totalCost: true },
-      where: { orderDate: { gte: threeMonthsAgo } },
+      where: { orderDate: { gte: threeMonthsAgo }, ...orgFilter },
     }),
   ]);
 

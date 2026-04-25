@@ -6,13 +6,27 @@
 import { prisma } from "@spotlight/db";
 
 /** Get compliance overview stats */
-export async function getComplianceOverview() {
+export async function getComplianceOverview(organizationId?: string) {
   const [totalItems, compliantItems, mandateCount, outletsTracked, mandateItemCount] = await Promise.all([
-    prisma.mandateCompliance.count(),
-    prisma.mandateCompliance.count({ where: { isCompliant: true } }),
-    prisma.mandate.count({ where: { isActive: true } }),
-    prisma.outlet.count({ where: { isActive: true, mandateCompliance: { some: {} } } }),
-    prisma.mandateItem.count(),
+    prisma.mandateCompliance.count({
+      where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
+    }),
+    prisma.mandateCompliance.count({
+      where: { isCompliant: true, ...(organizationId ? { outlet: { organizationId } } : {}) },
+    }),
+    prisma.mandate.count({
+      where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
+    }),
+    prisma.outlet.count({
+      where: {
+        isActive: true,
+        mandateCompliance: { some: {} },
+        ...(organizationId ? { organizationId } : {}),
+      },
+    }),
+    prisma.mandateItem.count({
+      where: { ...(organizationId ? { mandate: { organizationId } } : {}) },
+    }),
   ]);
 
   const compliancePct = totalItems > 0 ? Math.round((compliantItems / totalItems) * 100) : 0;
@@ -30,8 +44,9 @@ export async function getComplianceOverview() {
 }
 
 /** Get compliance matrix — all mandate items with outlet compliance status */
-export async function getComplianceMatrix() {
+export async function getComplianceMatrix(organizationId?: string) {
   const compliance = await prisma.mandateCompliance.findMany({
+    where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
     include: {
       outlet: { select: { id: true, name: true, slug: true } },
       mandateItem: {
@@ -62,14 +77,15 @@ export async function getComplianceMatrix() {
 }
 
 /** Get compliance drill-down — mandate items with per-outlet compliance status */
-export async function getComplianceDrillDown() {
+export async function getComplianceDrillDown(organizationId?: string) {
   const mandates = await prisma.mandate.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
     include: {
       mandateItems: {
         include: {
           product: { select: { id: true, name: true, sku: true, category: true } },
           mandateCompliance: {
+            where: { ...(organizationId ? { outlet: { organizationId } } : {}) },
             include: {
               outlet: { select: { id: true, name: true, slug: true } },
             },
@@ -116,9 +132,9 @@ export async function getComplianceDrillDown() {
 }
 
 /** Get compliance grouped by outlet */
-export async function getComplianceByOutlet() {
+export async function getComplianceByOutlet(organizationId?: string) {
   const outlets = await prisma.outlet.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(organizationId ? { organizationId } : {}) },
     select: {
       id: true,
       name: true,

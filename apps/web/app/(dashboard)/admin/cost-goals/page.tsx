@@ -8,19 +8,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { getAdminCostGoals } from "@/lib/queries/admin";
-import { prisma } from "@spotlight/db";
+import { getAdminCostGoals, getOutletOptions } from "@/lib/queries/admin";
+import { getServerUser } from "@/lib/auth";
 import { CostGoalTable } from "./CostGoalTable";
 import { CostGoalForm } from "./CostGoalForm";
 
 export default async function CostGoalsPage() {
+  const user = await getServerUser();
+  const orgId = user?.organizationId;
   const [goals, outlets] = await Promise.all([
-    getAdminCostGoals(),
-    prisma.outlet.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+    getAdminCostGoals(orgId),
+    getOutletOptions(orgId),
   ]);
 
   const totalGoals = goals.length;

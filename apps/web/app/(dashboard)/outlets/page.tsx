@@ -10,9 +10,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { getOutlets } from "@/lib/queries/outlets";
+import { getServerUser } from "@/lib/auth";
 
 export default async function OutletsPage() {
-  const outlets = await getOutlets();
+  const user = await getServerUser();
+  const outlets = await getOutlets(user?.organizationId);
 
   return (
     <div className="space-y-6">

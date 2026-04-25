@@ -34,7 +34,14 @@ export default async function SupplierDetailPage({
 
   // Distributors only see this supplier's products that flow through their distribution
   const scopeDistributorId = user?.role === "DISTRIBUTOR" ? user.distributorId : undefined;
-  const data = await getSupplierDetail(params.id, scopeDistributorId);
+
+  // Internal users (VP, Director, Admin, Room Manager) see data scoped to their org.
+  // Distributor/Supplier users see their full cross-org data (organizationId = undefined).
+  const orgScope = (user?.role === 'DISTRIBUTOR' || user?.role === 'SUPPLIER')
+    ? undefined
+    : user?.organizationId;
+
+  const data = await getSupplierDetail(params.id, scopeDistributorId, orgScope);
   if (!data) notFound();
 
   const { supplier, metrics, volumeTrend, categoryBreakdown, distributorPartners, outletPerformance, productPerformance, winePortfolio } = data;

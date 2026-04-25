@@ -37,7 +37,11 @@ export default async function DistributorDetailPage({
     redirect("/overview");
   }
 
-  const data = await getDistributorDetail(params.id);
+  // Internal users (VP, Director, Admin, Room Manager) see data scoped to their org.
+  // Distributor users see their full cross-org data (organizationId = undefined).
+  const orgScope = user?.role === 'DISTRIBUTOR' ? undefined : user?.organizationId;
+
+  const data = await getDistributorDetail(params.id, orgScope);
   if (!data) notFound();
 
   const { distributor, metrics, volumeTrend, categoryBreakdown, outletPerformance, productPerformance, winePortfolio } = data;
@@ -181,6 +185,7 @@ export default async function DistributorDetailPage({
       {/* Interactive Tables */}
       <DistributorTabs
         distributorName={distributor.name}
+        organizationName={user?.organizationName ?? "Property"}
         outletPerformance={serializedOutlets}
         productPerformance={serializedProducts}
         winePortfolio={winePortfolio}

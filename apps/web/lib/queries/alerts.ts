@@ -6,8 +6,9 @@ import { prisma } from "@spotlight/db";
 export async function getAlerts(options?: {
   filter?: "all" | "active" | "read" | "dismissed";
   limit?: number;
+  organizationId?: string;
 }) {
-  const { filter = "all", limit = 100 } = options ?? {};
+  const { filter = "all", limit = 100, organizationId } = options ?? {};
 
   const where: Record<string, unknown> = {};
   if (filter === "active") {
@@ -18,6 +19,10 @@ export async function getAlerts(options?: {
     where.isDismissed = false;
   } else if (filter === "dismissed") {
     where.isDismissed = true;
+  }
+
+  if (organizationId) {
+    where.outlet = { organizationId };
   }
 
   return prisma.alert.findMany({
@@ -34,11 +39,14 @@ export async function getAlerts(options?: {
 /**
  * Get alert stats for the feed header.
  */
-export async function getAlertStats() {
+export async function getAlertStats(options?: { organizationId?: string }) {
+  const { organizationId } = options ?? {};
+  const orgFilter = organizationId ? { outlet: { organizationId } } : {};
+
   const [total, unread, dismissed] = await Promise.all([
-    prisma.alert.count(),
-    prisma.alert.count({ where: { isRead: false, isDismissed: false } }),
-    prisma.alert.count({ where: { isDismissed: true } }),
+    prisma.alert.count({ where: { ...orgFilter } }),
+    prisma.alert.count({ where: { isRead: false, isDismissed: false, ...orgFilter } }),
+    prisma.alert.count({ where: { isDismissed: true, ...orgFilter } }),
   ]);
 
   return { total, unread, dismissed, read: total - unread - dismissed };
@@ -47,8 +55,13 @@ export async function getAlertStats() {
 /**
  * Get unread alert count (for header badge).
  */
-export async function getUnreadAlertCount() {
+export async function getUnreadAlertCount(options?: { organizationId?: string }) {
+  const { organizationId } = options ?? {};
   return prisma.alert.count({
-    where: { isRead: false, isDismissed: false },
+    where: {
+      isRead: false,
+      isDismissed: false,
+      ...(organizationId ? { outlet: { organizationId } } : {}),
+    },
   });
 }
